@@ -44,34 +44,76 @@ def _now_label():
     return datetime.now().strftime("%I:%M %p").lstrip("0")
 
 
+# BCP MV Campus center — Lot 762, Topaz cor. Sapphire St., Brgy. San Agustin, Novaliches, QC
+MV_CENTER_LAT = 14.72632
+MV_CENTER_LNG = 121.03601
+
+# Relative offsets (degrees) for on-campus buildings / checkpoints around Topaz–Sapphire
+CAMPUS_BUILDINGS = [
+    ("MAIN", "Main Academic Building", 4, 14.72638, 121.03605),
+    ("SCI", "Science / Laboratory Building", 3, 14.72655, 121.03628),
+    ("SC", "Student Center", 2, 14.72618, 121.03635),
+    ("SEC", "Security Office", 1, 14.72620, 121.03578),
+]
+
+CAMPUS_ZONES = [
+    ("G2", "Main Gate · Topaz / Sapphire", "MAIN", "gate", 87),
+    ("QN", "Open Court / Quadrangle", None, "open_space", 72),
+    ("S1", "Science Building Zone", "SCI", "building", 72),
+    ("SCL", "Student Center Lobby", "SC", "building", 59),
+    ("SECZ", "Security Office Zone", "SEC", "building", 35),
+    ("AZA", "Assembly Zone A · Topaz side", "MAIN", "assembly_area", 20),
+    ("AZB", "Assembly Zone B · Sapphire side", "SCI", "assembly_area", 20),
+]
+
+CAMPUS_CHECKPOINTS = [
+    ("SEC", "Security Office", "SECZ", 14.72620, 121.03578),
+    ("G2", "Main Gate · Topaz / Sapphire", "G2", 14.72605, 121.03588),
+    ("QN", "Open Court / Quadrangle", "QN", 14.72645, 121.03615),
+    ("S1", "Science Building", "S1", 14.72655, 121.03628),
+    ("SC", "Student Center", "SCL", 14.72618, 121.03635),
+]
+
+
+def sync_mv_campus_geo():
+    """Keep seeded building/checkpoint coordinates aligned to the MV Campus map."""
+    for code, name, floors, lat, lng in CAMPUS_BUILDINGS:
+        execute(
+            """UPDATE buildings
+               SET building_name=%s, floors=%s, latitude=%s, longitude=%s
+               WHERE building_code=%s""",
+            (name, floors, lat, lng, code),
+        )
+    for code, name, _building, ztype, risk in CAMPUS_ZONES:
+        execute(
+            """UPDATE campus_zones SET zone_name=%s, zone_type=%s
+               WHERE zone_code=%s""",
+            (name, ztype, code),
+        )
+    for code, name, _zcode, lat, lng in CAMPUS_CHECKPOINTS:
+        execute(
+            """UPDATE checkpoints
+               SET checkpoint_name=%s, latitude=%s, longitude=%s
+               WHERE checkpoint_code=%s""",
+            (name, lat, lng, code),
+        )
+
+
 def ensure_campus_seed():
     """Insert baseline campus geography if the DB is empty."""
     if query_one("SELECT id FROM buildings LIMIT 1"):
+        sync_mv_campus_geo()
         return False
 
-    buildings = [
-        ("MAIN", "Main Building", 4, 14.73290, 121.05790),
-        ("SCI", "Science Building", 3, 14.73310, 121.05840),
-        ("SC", "Student Center", 2, 14.73250, 121.05870),
-        ("SEC", "Security Office", 1, 14.73270, 121.05750),
-    ]
-    for code, name, floors, lat, lng in buildings:
+    for code, name, floors, lat, lng in CAMPUS_BUILDINGS:
         execute(
             "INSERT INTO buildings (building_code, building_name, floors, latitude, longitude) VALUES (%s,%s,%s,%s,%s)",
             (code, name, floors, lat, lng),
         )
 
     bmap = {r["building_code"]: r["id"] for r in query_all("SELECT id, building_code FROM buildings")}
-    zones = [
-        ("G2", "Gate 2 / Main Entrance", bmap["MAIN"], "gate", 87),
-        ("QN", "Quadrangle North", None, "open_space", 72),
-        ("S1", "Science Building Zone", bmap["SCI"], "building", 72),
-        ("SCL", "Student Center Lobby", bmap["SC"], "building", 59),
-        ("SECZ", "Security Office Zone", bmap["SEC"], "building", 35),
-        ("AZA", "Assembly Zone A", bmap["MAIN"], "assembly_area", 20),
-        ("AZB", "Assembly Zone B", bmap["SCI"], "assembly_area", 20),
-    ]
-    for code, name, bid, ztype, risk in zones:
+    for code, name, building_code, ztype, risk in CAMPUS_ZONES:
+        bid = bmap.get(building_code) if building_code else None
         execute(
             """INSERT INTO campus_zones (zone_code, zone_name, building_id, zone_type, risk_score)
                VALUES (%s,%s,%s,%s,%s)""",
@@ -79,14 +121,7 @@ def ensure_campus_seed():
         )
 
     zmap = {r["zone_code"]: r["id"] for r in query_all("SELECT id, zone_code FROM campus_zones")}
-    checkpoints = [
-        ("SEC", "Security Office", "SECZ", 14.73270, 121.05750),
-        ("G2", "Main Entrance", "G2", 14.73295, 121.05770),
-        ("QN", "Quadrangle North", "QN", 14.73320, 121.05810),
-        ("S1", "Science Building", "S1", 14.73310, 121.05840),
-        ("SC", "Student Center", "SCL", 14.73250, 121.05870),
-    ]
-    for code, name, zcode, lat, lng in checkpoints:
+    for code, name, zcode, lat, lng in CAMPUS_CHECKPOINTS:
         token = f"tok-{code.lower()}-{secrets.token_hex(4)}"
         execute(
             """INSERT INTO checkpoints (checkpoint_code, checkpoint_name, zone_id, scan_token, latitude, longitude)
@@ -102,7 +137,7 @@ def ensure_campus_seed():
     execute(
         """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
            VALUES (%s,%s,%s,'security',%s,%s,'high','responding')""",
-        ("INC-24091", zmap["G2"], lead_id, "Unauthorized access attempt", "Attempted entry without ID at Gate 2"),
+        ("INC-24091", zmap["G2"], lead_id, "Unauthorized access attempt", "Attempted entry without ID at Main Gate · Topaz / Sapphire"),
     )
     execute(
         """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
@@ -112,7 +147,7 @@ def ensure_campus_seed():
     execute(
         """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
            VALUES (%s,%s,%s,'medical',%s,%s,'high','resolved')""",
-        ("INC-24089", zmap["SCL"], lead_id, "Medical assistance requested", "Student required first aid in lobby"),
+        ("INC-24089", zmap["SCL"], lead_id, "Medical assistance requested", "Student required first aid in Student Center lobby"),
     )
 
     execute(
@@ -129,17 +164,17 @@ def ensure_campus_seed():
     execute(
         """INSERT INTO drills (drill_type, title, scheduled_at, lead_officer_id, status)
            VALUES ('fire',%s, DATE_ADD(NOW(), INTERVAL 9 DAY), %s, 'planned')""",
-        ("Fire evacuation drill", lead_id),
+        ("Fire evacuation drill · MV Campus", lead_id),
     )
     execute(
         """INSERT INTO drills (drill_type, title, scheduled_at, lead_officer_id, status)
            VALUES ('earthquake',%s, DATE_ADD(NOW(), INTERVAL 16 DAY), %s, 'planned')""",
-        ("Earthquake response drill", lead_id),
+        ("Earthquake response drill · MV Campus", lead_id),
     )
 
     execute(
         """INSERT INTO evacuation_plans (building_id, floor_label, plan_name, primary_assembly_zone_id, version_no, created_by)
-           VALUES (%s,'Floors 1–4','Main Building Evacuation',%s,3,%s)""",
+           VALUES (%s,'Floors 1–4','Main Academic Building Evacuation',%s,3,%s)""",
         (bmap["MAIN"], zmap["AZA"], lead_id),
     )
     execute(
@@ -566,8 +601,16 @@ def get_safety_dashboard(section="overview"):
         "hero": {"checkpoints": len(all_checkpoints), "readiness": readiness, "avg_response": "06m"},
         "report_types": report_types,
         "map": {
-            "center": [current_app.config.get("CAMPUS_MAP_LAT", 14.7328), current_app.config.get("CAMPUS_MAP_LNG", 121.0582)],
-            "zoom": current_app.config.get("CAMPUS_MAP_ZOOM", 17),
+            "center": [
+                current_app.config.get("CAMPUS_MAP_LAT", MV_CENTER_LAT),
+                current_app.config.get("CAMPUS_MAP_LNG", MV_CENTER_LNG),
+            ],
+            "zoom": current_app.config.get("CAMPUS_MAP_ZOOM", 18),
+            "name": current_app.config.get("CAMPUS_NAME", "BCP MV Campus"),
+            "address": current_app.config.get(
+                "CAMPUS_ADDRESS",
+                "Lot 762, Topaz corner Sapphire Street, Millionaires Village, Barangay San Agustin, Novaliches, Quezon City",
+            ),
             "points": map_points,
             "geometry": patrol_meta.get("geometry"),
         },

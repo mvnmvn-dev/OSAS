@@ -28,9 +28,9 @@ def test_haversine_positive():
 def test_heuristic_trip_returns_geometry(app):
     with app.app_context():
         points = [
-            {"lat": 14.7327, "lng": 121.0575, "code": "SEC"},
-            {"lat": 14.73295, "lng": 121.0577, "code": "G2"},
-            {"lat": 14.7331, "lng": 121.0584, "code": "S1"},
+            {"lat": 14.72620, "lng": 121.03578, "code": "SEC"},
+            {"lat": 14.72605, "lng": 121.03588, "code": "G2"},
+            {"lat": 14.72655, "lng": 121.03628, "code": "S1"},
         ]
         result = osrm_client.heuristic_trip(points, roundtrip=True)
         assert result["engine"] == "heuristic"
@@ -50,7 +50,7 @@ def test_trip_uses_osrm_when_available(app):
         "trips": [{
             "distance": 1800.4,
             "duration": 1400.2,
-            "geometry": {"type": "LineString", "coordinates": [[121.0575, 14.7327], [121.0577, 14.73295]]},
+            "geometry": {"type": "LineString", "coordinates": [[121.03578, 14.72620], [121.03588, 14.72605]]},
         }],
     }
     with app.app_context():
@@ -60,9 +60,9 @@ def test_trip_uses_osrm_when_available(app):
             resp.json.return_value = fake
             mock_get.return_value = resp
             points = [
-                {"lat": 14.7327, "lng": 121.0575},
-                {"lat": 14.73295, "lng": 121.0577},
-                {"lat": 14.7331, "lng": 121.0584},
+                {"lat": 14.72620, "lng": 121.03578},
+                {"lat": 14.72605, "lng": 121.03588},
+                {"lat": 14.72655, "lng": 121.03628},
             ]
             result = osrm_client.trip(points, roundtrip=True)
             assert result["engine"] == "OSRM"
@@ -75,8 +75,8 @@ def test_trip_falls_back_when_osrm_down(app):
     with app.app_context():
         with patch("services.osrm_client.requests.get", side_effect=ConnectionError("down")):
             points = [
-                {"lat": 14.7327, "lng": 121.0575},
-                {"lat": 14.73295, "lng": 121.0577},
+                {"lat": 14.72620, "lng": 121.03578},
+                {"lat": 14.72605, "lng": 121.03588},
             ]
             result = osrm_client.trip(points)
             assert result["engine"] == "heuristic"

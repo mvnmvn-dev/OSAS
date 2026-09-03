@@ -34,11 +34,16 @@ class Config:
     OSRM_PROFILE = os.getenv("OSRM_PROFILE", "foot")
     OSRM_TIMEOUT_SECONDS = float(os.getenv("OSRM_TIMEOUT_SECONDS", "8"))
 
-    # Map defaults — Bestlink College (Quezon City) approximate campus center
-    CAMPUS_MAP_LAT = float(os.getenv("CAMPUS_MAP_LAT", "14.73280"))
-    CAMPUS_MAP_LNG = float(os.getenv("CAMPUS_MAP_LNG", "121.05820"))
-    CAMPUS_MAP_ZOOM = int(os.getenv("CAMPUS_MAP_ZOOM", "17"))
-
+    # Map defaults — BCP Millionaires Village (MV) Campus, Novaliches, Quezon City
+    # Lot 762, Topaz cor. Sapphire St., Brgy. San Agustin
+    CAMPUS_MAP_LAT = float(os.getenv("CAMPUS_MAP_LAT", "14.72632"))
+    CAMPUS_MAP_LNG = float(os.getenv("CAMPUS_MAP_LNG", "121.03601"))
+    CAMPUS_MAP_ZOOM = int(os.getenv("CAMPUS_MAP_ZOOM", "18"))
+    CAMPUS_NAME = os.getenv("CAMPUS_NAME", "BCP MV Campus")
+    CAMPUS_ADDRESS = os.getenv(
+        "CAMPUS_ADDRESS",
+        "Lot 762, Topaz corner Sapphire Street, Millionaires Village, Barangay San Agustin, Novaliches, Quezon City",
+    )
     # Optional notification channels (queued when unset)
     SMTP_HOST = os.getenv("SMTP_HOST", "")
     SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

@@ -4608,6 +4608,26 @@ body.dark-mode .profile-header-btn {
     width: 100%;
     border-radius: 0.7rem;
 }
+.map-address-note {
+    margin: 0.65rem 0 0;
+    color: var(--bcp-muted);
+    font-size: 0.74rem;
+    line-height: 1.4;
+}
+.map-address-note i {
+    color: #2b8175;
+    margin-right: 0.3rem;
+}
+.campus-map-caption {
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid #d6e6e2;
+    border-radius: 0.45rem;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.72rem;
+    color: #173d67;
+    box-shadow: var(--shadow-sm);
+    max-width: 14rem;
+}
 .modal-dialog-wide {
     width: min(100%, 40rem);
 }

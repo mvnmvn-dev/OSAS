@@ -81,11 +81,12 @@
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-map-location-dot"></i> Live Campus Risk Map</h2>
-                <p class="section-subtitle">Leaflet map · checkpoint risk · OSRM route geometry</p>
+                <p class="section-subtitle">{{ safety.map.name }} · Topaz cor. Sapphire St., Brgy. San Agustin, Novaliches, QC</p>
             </div>
             <span class="status-badge status-success">LIVE</span>
         </div>
         <div id="campus-live-map" class="campus-live-map"></div>
+        <p class="map-address-note"><i class="fas fa-location-dot"></i> {{ safety.map.address }}</p>
         <script type="application/json" id="campus-map-data">{{ safety.map|tojson }}</script>
     </div>
     <div class="panel-card">
@@ -531,12 +532,21 @@ document.addEventListener('click', function (event) {
   if (!el || !raw || typeof L === 'undefined') return;
   var data;
   try { data = JSON.parse(raw.textContent); } catch (e) { return; }
-  var center = data.center || [14.7328, 121.0582];
-  var map = L.map(el).setView(center, data.zoom || 17);
+  var center = data.center || [14.72632, 121.03601];
+  var map = L.map(el).setView(center, data.zoom || 18);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 20,
-    attribution: '&copy; OpenStreetMap'
+    attribution: '&copy; OpenStreetMap · BCP MV Campus'
   }).addTo(map);
+  if (data.name) {
+    var caption = L.control({ position: 'topright' });
+    caption.onAdd = function () {
+      var div = L.DomUtil.create('div', 'campus-map-caption');
+      div.innerHTML = '<strong>' + data.name + '</strong>';
+      return div;
+    };
+    caption.addTo(map);
+  }
   var colors = { danger: '#dc2626', warning: '#d97706', success: '#0f766e' };
   (data.points || []).forEach(function (p) {
     if (p.lat == null || p.lng == null) return;
