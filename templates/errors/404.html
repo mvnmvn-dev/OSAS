@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="error-page">
+    <div class="error-page-icon not-found">
+        <i class="fas fa-book-open"></i>
+    </div>
+    <p class="error-page-code">404</p>
+    <h2 class="error-page-title">Page Not Found</h2>
+    <p class="error-page-desc">The page you're looking for seems to have been checked out and never returned. Let's get you back to the library.</p>
+    <a href="{{ url_for('dashboard.index') }}" class="btn-primary-square">
+        <i class="fas fa-house"></i> Return to Dashboard
+    </a>
+</div>
+{% endblock %}

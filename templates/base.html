@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+
+{% from 'macros/avatar.html' import user_avatar %}
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <title>{% block title %}BCP Safety and Security Campus Management System{% endblock %}</title>
+
+    <link rel="icon" href="{{ url_for('static', filename='images/bcp-logo.png') }}" type="image/png">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='images/bcp-logo.png') }}">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    {% block head_extra %}{% endblock %}
+</head>
+
+<body>
+
+    <div class="app-shell">
+
+        <aside id="sidebar">
+
+            <div class="sidebar-logo">
+
+                <img src="{{ url_for('static', filename='images/bcp-logo.png') }}" alt="Bestlink College">
+
+            </div>
+
+            <button type="button" class="sidebar-profile sidebar-profile-trigger" id="sidebar-profile-trigger" aria-label="Open profile menu" aria-expanded="false" aria-controls="profile-menu">
+
+                {{ user_avatar(current_user, 'md', 'sidebar-profile-avatar') }}
+
+                <p class="profile-name">{{ current_user.full_name }}</p>
+
+                <p class="profile-meta">{{ current_user.username }}</p>
+
+                <p class="profile-meta">{{ current_user.campus_id }}</p>
+
+                <span class="role-badge role-{{ user_role }}">{{ role_label }}</span>
+
+            </button>
+
+
+
+            <nav class="sidebar-nav">
+
+                {% for section in nav_sections %}
+
+                <p class="nav-section-label">{{ section.label }}</p>
+
+                {% for item in section.nav_items %}
+
+                <a href="{{ url_for(item.endpoint) }}" class="nav-link {% if request.endpoint == item.endpoint or (item.endpoint == 'dashboard.index' and request.endpoint == 'safety.index') %}active{% endif %}">
+
+                    <i class="fas {{ item.icon }}"></i> {{ item.label }}
+
+                </a>
+
+                {% endfor %}
+
+                {% endfor %}
+
+            </nav>
+
+        </aside>
+
+
+
+        <div id="app-main" class="app-main">
+
+            <header class="header-bar">
+
+                <div class="header-left">
+
+                    <button id="menu-toggle" class="header-icon-btn" title="Toggle menu" aria-label="Toggle menu">
+
+                        <i class="fas fa-bars"></i>
+
+                    </button>
+
+                    {% if current_user.is_authenticated %}
+
+                    <span class="header-role-badge role-badge role-{{ user_role }}" title="Acting as {{ role_label }}">
+
+                        <i class="fas fa-user-shield"></i> {{ role_label }}
+
+                    </span>
+
+                    {% endif %}
+
+                </div>
+
+                <div class="header-right">
+
+                    <span id="clock" class="header-clock show-sm hidden-el"></span>
+
+
+
+                    <!-- Notifications -->
+
+                    <div class="notif-wrap">
+
+                        <button id="notif-toggle" class="header-icon-btn notif-btn" title="Notifications" aria-label="Notifications">
+
+                            <i class="fas fa-bell"></i>
+
+                            {% if unread_count > 0 %}
+
+                            <span class="notif-badge" id="notif-badge">{{ unread_count }}</span>
+
+                            {% endif %}
+
+                        </button>
+
+                        <div id="notif-dropdown" class="notif-dropdown">
+
+                            <div class="notif-dropdown-header">
+
+                                <span>Notifications</span>
+
+                                {% if unread_count > 0 %}
+
+                                <button id="notif-read-all" class="notif-read-all">Mark all read</button>
+
+                                {% endif %}
+
+                            </div>
+
+                            <div class="notif-list" id="notif-list">
+
+                                {% for note in notifications %}
+
+                                <a href="{{ note.link or '#' }}" class="notif-item {% if not note.is_read %}unread{% endif %}" data-id="{{ note.id }}">
+
+                                    <div class="notif-item-icon notif-{{ note.ntype }}">
+
+                                        <i class="fas fa-{% if note.ntype == 'success' %}check{% elif note.ntype == 'warning' %}exclamation{% elif note.ntype == 'danger' %}triangle-exclamation{% else %}info{% endif %}"></i>
+
+                                    </div>
+
+                                    <div class="notif-item-body">
+
+                                        <p class="notif-item-title">{{ note.title }}</p>
+
+                                        <p class="notif-item-msg">{{ note.message }}</p>
+
+                                        <p class="notif-item-time" data-timestamp="{{ note.created_at.isoformat() if note.created_at else '' }}">{{ note.created_at.strftime('%b %d, %Y %I:%M %p') if note.created_at else '' }}</p>
+
+                                    </div>
+
+                                </a>
+
+                                {% else %}
+
+                                <p class="notif-empty">No notifications yet</p>
+
+                                {% endfor %}
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <!-- Profile menu -->
+
+                    <div class="profile-wrap">
+
+                        <button type="button" id="profile-toggle" class="profile-header-btn" title="My profile" aria-label="My profile" aria-expanded="false" aria-controls="profile-menu">
+
+                            {{ user_avatar(current_user, 'sm') }}
+
+                            <i class="fas fa-chevron-down profile-chevron"></i>
+
+                        </button>
+
+                        <div id="profile-menu" class="profile-menu" role="menu" aria-label="Profile menu">
+
+                            <div class="profile-menu-header">
+
+                                {{ user_avatar(current_user, 'lg') }}
+
+                                <div class="profile-menu-info">
+
+                                    <p class="profile-menu-name">{{ current_user.full_name }}</p>
+
+                                    <span class="role-badge role-{{ user_role }}">{{ role_label }}</span>
+
+                                    <p class="profile-menu-meta">{{ current_user.campus_id }}</p>
+
+                                    <p class="profile-menu-meta">{{ current_user.email }}</p>
+
+                                </div>
+
+                            </div>
+
+                            <div class="profile-menu-links">
+
+                                <a href="{{ url_for('profile.index') }}" class="profile-menu-link">
+
+                                    <i class="fas fa-user-gear"></i> Account Settings
+
+                                </a>
+
+                                <a href="{{ url_for('auth.change_password') }}" class="profile-menu-link">
+
+                                    <i class="fas fa-key"></i> Change Password
+
+                                </a>
+
+                            </div>
+
+                            <div class="profile-menu-footer">
+
+                                <a href="{{ url_for('auth.logout') }}" class="profile-menu-logout">
+
+                                    <i class="fas fa-right-from-bracket"></i> Logout
+
+                                </a>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+
+
+                    <button id="theme-toggle" class="header-icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
+
+                        <i class="fas fa-moon" id="theme-icon"></i>
+
+                    </button>
+
+                    <button onclick="toggleFullscreen()" class="header-icon-btn" title="Fullscreen" aria-label="Fullscreen">
+
+                        <i class="fas fa-expand" id="fullscreen-icon"></i>
+
+                    </button>
+
+                    {% if has_perm('search.view') %}
+
+                    <button id="search-toggle" class="header-icon-btn" title="Search" aria-label="Search">
+
+                        <i class="fas fa-search"></i>
+
+                    </button>
+
+                    {% endif %}
+
+                </div>
+
+            </header>
+
+
+
+            {% if has_perm('search.view') %}
+
+            <div id="search-overlay">
+
+                <div class="search-modal">
+
+                    <form action="{{ url_for('search.index') }}" method="GET" class="search-form">
+
+                        <div class="search-input-wrap">
+
+                            <input type="text" name="q" id="quick-search-input" placeholder="Search books or type a command..." autocomplete="off">
+
+                            <div id="search-suggest-list" class="search-suggest-list"></div>
+
+                        </div>
+
+                        <button type="submit" class="btn-primary-square"><i class="fas fa-search"></i> Search</button>
+
+                    </form>
+
+                    <div class="search-modal-hint">
+
+                        <button type="button" class="search-hint-chip" data-query="fiction">Fiction</button>
+
+                        <button type="button" class="search-hint-chip" data-query="science">Science</button>
+
+                        <button type="button" class="search-hint-chip" data-query="history">History</button>
+
+                        <button type="button" class="search-hint-chip" data-query="programming">Programming</button>
+
+                    </div>
+
+                    <p style="font-size:0.75rem;color:#94a3b8;margin-top:0.5rem;text-align:center;">Press <kbd style="background:#f1f5f9;padding:0.1rem 0.35rem;border-radius:0.25rem;font-size:0.7rem;">Esc</kbd> to close</p>
+
+                </div>
+
+            </div>
+
+            {% endif %}
+
+
+
+            <main class="content-area">
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+
+                {% if messages %}
+
+                <div class="flash-list">
+
+                    {% for category, message in messages %}
+
+                    <div class="flash-message flash-{{ category }}">{{ message }}</div>
+
+                    {% endfor %}
+
+                </div>
+
+                {% endif %}
+
+                {% endwith %}
+
+
+
+                {% if show_staff_banner %}
+
+                <div class="staff-context-banner">
+
+                    <i class="fas fa-briefcase"></i>
+
+                    <span>
+
+                        <strong>OSAS Operations</strong> — You are acting as <strong>{{ role_label }}</strong>.
+
+                        {% if user_role == 'staff' %}
+
+                        Some administrative actions require Administrator access.
+
+                        {% endif %}
+
+                    </span>
+
+                </div>
+
+                {% endif %}
+
+
+
+                {% if page_title %}
+
+                <div class="page-header-card">
+
+                    <div class="page-header-row">
+
+                        <div class="page-header-text">
+
+                            {% if breadcrumbs %}
+
+                            <nav class="breadcrumb-nav">
+
+                                {% for label, url in breadcrumbs %}
+
+                                    {% if url %}
+
+                                    <a href="{{ url }}" class="breadcrumb-link">{{ label }}</a>
+
+                                    <span class="breadcrumb-sep">&rsaquo;</span>
+
+                                    {% else %}
+
+                                    <span class="breadcrumb-current">{{ label }}</span>
+
+                                    {% endif %}
+
+                                {% endfor %}
+
+                            </nav>
+
+                            {% endif %}
+
+                            <h1 class="page-title">{{ page_title }}</h1>
+
+                            {% block page_subtitle %}{% endblock %}
+
+                        </div>
+
+                        <div class="page-header-actions">
+
+                            {% block page_actions %}{% endblock %}
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                {% endif %}
+
+
+
+                {% block content %}{% endblock %}
+
+            </main>
+
+        </div>
+
+    </div>
+
+
+
+    <div id="sidebar-overlay"></div>
+
+    <div id="command-palette" class="command-palette" hidden>
+
+        <div class="command-palette-backdrop"></div>
+
+        <div class="command-palette-dialog">
+
+            <div class="command-palette-header">
+
+                <i class="fas fa-terminal"></i>
+
+                <input type="text" id="command-palette-input" placeholder="Jump to a module…" autocomplete="off">
+
+            </div>
+
+            <div id="command-palette-results" class="command-palette-results"></div>
+
+        </div>
+
+    </div>
+
+    {% block modals %}{% endblock %}
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+    {% block scripts %}{% endblock %}
+
+</body>
+
+</html>
+

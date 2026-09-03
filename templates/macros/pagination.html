@@ -1,0 +1,40 @@
+{% macro render_pagination(pagination) %}
+{% if pagination and pagination.total > 0 %}
+<nav class="table-pagination" aria-label="Table pagination">
+    <p class="pagination-summary">
+        Showing {{ pagination.start }}–{{ pagination.end }} of {{ pagination.total }}
+    </p>
+    {% if pagination.total_pages > 1 %}
+    <div class="pagination-controls">
+        {% if pagination.has_prev %}
+        <a href="{{ pagination.prev_url }}" class="pagination-btn" aria-label="Previous page">
+            <i class="fas fa-chevron-left"></i> Prev
+        </a>
+        {% else %}
+        <span class="pagination-btn disabled" aria-disabled="true">
+            <i class="fas fa-chevron-left"></i> Prev
+        </span>
+        {% endif %}
+
+        {% for p in pagination.pages %}
+        {% if p == pagination.page %}
+        <span class="pagination-btn active" aria-current="page">{{ p }}</span>
+        {% else %}
+        <a href="{{ pagination.page_urls[p] }}" class="pagination-btn">{{ p }}</a>
+        {% endif %}
+        {% endfor %}
+
+        {% if pagination.has_next %}
+        <a href="{{ pagination.next_url }}" class="pagination-btn" aria-label="Next page">
+            Next <i class="fas fa-chevron-right"></i>
+        </a>
+        {% else %}
+        <span class="pagination-btn disabled" aria-disabled="true">
+            Next <i class="fas fa-chevron-right"></i>
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

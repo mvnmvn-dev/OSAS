@@ -1,0 +1,10 @@
+{% macro user_avatar(user, size='md', extra_class='') %}
+{% set size_class = 'avatar-sm' if size == 'sm' else ('avatar-lg' if size == 'lg' else 'avatar-md') %}
+<div class="user-avatar {{ size_class }} {{ extra_class }}" title="{{ user.full_name }}">
+    {% if user.profile_image %}
+    <img src="{{ url_for('static', filename=user.profile_image) }}" alt="{{ user.full_name }}">
+    {% else %}
+    <span class="user-avatar-initials">{{ user.initials() }}</span>
+    {% endif %}
+</div>
+{% endmacro %}

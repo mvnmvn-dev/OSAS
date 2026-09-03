@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% from 'macros/ui.html' import csrf_field, form_input %}
+{% from 'macros/avatar.html' import user_avatar %}
+{% block content %}
+<div class="profile-settings-grid">
+    <div class="page-card profile-photo-card">
+        <div class="page-card-header"><i class="fas fa-camera"></i> Profile Photo</div>
+        <div class="modal-body profile-photo-body">
+            <div class="profile-photo-preview">
+                {{ user_avatar(current_user, 'lg') }}
+            </div>
+            <form method="POST" action="{{ url_for('profile.upload_photo') }}" enctype="multipart/form-data" class="profile-upload-form">
+                {{ csrf_field() }}
+                <div class="form-group">
+                    <label class="form-label" for="profile_image">Upload new photo</label>
+                    <input type="file" id="profile_image" name="profile_image" class="form-control" accept="image/jpeg,image/png,image/webp,image/gif" required>
+                    <p class="form-hint">JPG, PNG, WEBP, or GIF. Max 2 MB.</p>
+                </div>
+                <button type="submit" class="btn-primary-square"><i class="fas fa-upload"></i> Upload Photo</button>
+            </form>
+            {% if current_user.profile_image %}
+            <form method="POST" action="{{ url_for('profile.remove_photo') }}" class="profile-remove-form" onsubmit="return confirm('Remove your profile photo?');">
+                {{ csrf_field() }}
+                <button type="submit" class="btn-secondary"><i class="fas fa-trash"></i> Remove Photo</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="page-card">
+        <div class="page-card-header"><i class="fas fa-user-pen"></i> Personal Information</div>
+        <div class="modal-body">
+            <form method="POST" action="{{ url_for('profile.update') }}">
+                {{ csrf_field() }}
+                {{ form_input('full_name', 'Full Name', value=profile.full_name, required=true) }}
+                {{ form_input('email', 'Email', type='email', value=profile.email, required=true) }}
+                <div class="form-group">
+                    <label class="form-label">Username</label>
+                    <input type="text" class="form-control" value="{{ profile.username }}" disabled>
+                    <p class="form-hint">Username cannot be changed.</p>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Campus ID</label>
+                        <input type="text" class="form-control" value="{{ profile.campus_id }}" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Role</label>
+                        <input type="text" class="form-control" value="{{ role_label }}" disabled>
+                    </div>
+                </div>
+                <button type="submit" class="btn-primary-square"><i class="fas fa-save"></i> Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="page-card">
+        <div class="page-card-header"><i class="fas fa-shield-halved"></i> Security</div>
+        <div class="modal-body">
+            <p class="profile-security-text">Update your password regularly to keep your account secure.</p>
+            <a href="{{ url_for('auth.change_password') }}" class="btn-secondary">
+                <i class="fas fa-key"></i> Change Password
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('profile_image')?.addEventListener('change', function () {
+    const file = this.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const preview = document.querySelector('.profile-photo-preview .user-avatar');
+        if (!preview) return;
+        let img = preview.querySelector('img');
+        if (!img) {
+            preview.innerHTML = '';
+            img = document.createElement('img');
+            img.alt = 'Preview';
+            preview.appendChild(img);
+        }
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+});
+</script>
+{% endblock %}

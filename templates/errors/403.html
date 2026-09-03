@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="error-page">
+    <div class="error-page-icon forbidden">
+        <i class="fas fa-ban"></i>
+    </div>
+    <p class="error-page-code">403</p>
+    <h2 class="error-page-title">Access Denied</h2>
+    <p class="error-page-desc">
+        You are signed in as <strong>{{ role_label or (user_role|capitalize) }}</strong>.
+        {{ forbidden_message or "You don't have permission to view this page." }}
+    </p>
+    {% if attempted_endpoint %}
+    <p class="text-muted" style="font-size:0.8125rem;margin-bottom:1rem;">Requested: <code>{{ attempted_endpoint }}</code></p>
+    {% endif %}
+    <a href="{{ url_for('dashboard.index') }}" class="btn-primary-square">
+        <i class="fas fa-house"></i> Return to Dashboard
+    </a>
+</div>
+{% endblock %}

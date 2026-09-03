@@ -1,0 +1,13 @@
+Flask==3.0.3
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+mysql-connector-python==9.0.0
+Werkzeug==3.0.4
+python-dotenv==1.0.1
+pytest==8.3.3
+requests==2.32.5
+urllib3>=2.2.2,<3
+charset-normalizer>=3.3.2,<4
+chardet>=5.2,<6
+openpyxl==3.1.5
+reportlab==4.2.5
