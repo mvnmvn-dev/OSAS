@@ -4596,9 +4596,16 @@ body.dark-mode .profile-header-btn {
 .risk-pill.risk-warning { color: #a16207; background: #fef3c7; }
 .risk-pill.risk-success { color: #0f766e; background: #ccfbf1; }
 
+.campus-map-panel .section-header { margin-bottom: 1rem; }
+.campus-map-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(15rem, 0.85fr);
+    gap: 1rem;
+    align-items: stretch;
+}
+.campus-map-stage { min-width: 0; }
 .campus-live-map {
-    height: 18rem;
-    margin-top: 0.35rem;
+    height: 22rem;
     border-radius: 0.7rem;
     border: 1px solid #d6e6e2;
     z-index: 1;
@@ -4608,25 +4615,134 @@ body.dark-mode .profile-header-btn {
     width: 100%;
     border-radius: 0.7rem;
 }
-.map-address-note {
-    margin: 0.65rem 0 0;
+.campus-map-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem 1rem;
+    margin-top: 0.65rem;
+    color: var(--bcp-muted);
+    font-size: 0.72rem;
+}
+.campus-map-legend span { display: inline-flex; align-items: center; gap: 0.35rem; }
+.legend-dot {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    display: inline-block;
+}
+.legend-danger { background: #dc2626; }
+.legend-warning { background: #d97706; }
+.legend-success { background: #0f766e; }
+.legend-line {
+    width: 1.1rem;
+    height: 0.2rem;
+    border-radius: 999px;
+    background: #0f766e;
+    display: inline-block;
+}
+.campus-map-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+}
+.campus-map-id {
+    padding: 0.85rem 0.95rem;
+    border-radius: 0.7rem;
+    background: linear-gradient(180deg, #f3faf7 0%, #eef6f3 100%);
+    border: 1px solid #d7e8e2;
+}
+.campus-map-id strong {
+    display: block;
+    color: #173d67;
+    font-size: 0.9rem;
+}
+.campus-map-id p {
+    margin: 0.4rem 0 0;
     color: var(--bcp-muted);
     font-size: 0.74rem;
-    line-height: 1.4;
+    line-height: 1.45;
 }
-.map-address-note i {
-    color: #2b8175;
-    margin-right: 0.3rem;
+.campus-map-streets {
+    color: #2b8175 !important;
+    font-weight: 600;
 }
-.campus-map-caption {
-    background: rgba(255, 255, 255, 0.94);
-    border: 1px solid #d6e6e2;
-    border-radius: 0.45rem;
-    padding: 0.4rem 0.65rem;
-    font-size: 0.72rem;
-    color: #173d67;
+.campus-map-list-title {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--bcp-navy);
+}
+.campus-map-checkpoint-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    max-height: 16.5rem;
+    overflow: auto;
+}
+.campus-map-cp {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    width: 100%;
+    text-align: left;
+    padding: 0.65rem 0.7rem;
+    border: 1px solid #e4ece9;
+    border-radius: 0.65rem;
+    background: #fff;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+.campus-map-cp:hover,
+.campus-map-cp.active {
+    border-color: #9bc5bb;
     box-shadow: var(--shadow-sm);
-    max-width: 14rem;
+}
+.cp-code {
+    flex: 0 0 auto;
+    min-width: 2.4rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-align: center;
+    color: #fff;
+}
+.cp-code.risk-danger { background: #dc2626; }
+.cp-code.risk-warning { background: #d97706; }
+.cp-code.risk-success { background: #0f766e; }
+.cp-meta { min-width: 0; display: flex; flex-direction: column; gap: 0.15rem; }
+.cp-meta strong { color: var(--bcp-text); font-size: 0.78rem; }
+.cp-meta small { color: var(--bcp-muted); font-size: 0.68rem; }
+.cp-marker { background: transparent; border: 0; }
+.cp-marker-pin {
+    min-width: 4.4rem;
+    padding: 0.28rem 0.45rem 0.35rem;
+    border-radius: 0.55rem;
+    background: #fff;
+    border: 2px solid var(--cp-color, #173d67);
+    box-shadow: 0 6px 16px rgba(15, 31, 48, 0.18);
+    text-align: center;
+    line-height: 1.15;
+}
+.cp-marker-pin span {
+    display: block;
+    color: var(--cp-color, #173d67);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+.cp-marker-pin small {
+    display: block;
+    margin-top: 0.1rem;
+    color: #64748b;
+    font-size: 0.58rem;
+    font-weight: 600;
+}
+.cp-popup { font-size: 0.78rem; line-height: 1.4; }
+.cp-popup-campus { margin-top: 0.35rem; color: #2b8175; font-weight: 600; }
+@media (max-width: 900px) {
+    .campus-map-layout { grid-template-columns: 1fr; }
+    .campus-live-map { height: 18rem; }
 }
 .modal-dialog-wide {
     width: min(100%, 40rem);

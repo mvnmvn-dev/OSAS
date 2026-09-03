@@ -77,7 +77,7 @@
 
 {% if section == 'overview' %}
 <div class="dashboard-grid safety-grid mb-6">
-    <div class="panel-card">
+    <div class="panel-card campus-map-panel">
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-map-location-dot"></i> Live Campus Risk Map</h2>
@@ -85,8 +85,38 @@
             </div>
             <span class="status-badge status-success">LIVE</span>
         </div>
-        <div id="campus-live-map" class="campus-live-map"></div>
-        <p class="map-address-note"><i class="fas fa-location-dot"></i> {{ safety.map.address }}</p>
+        <div class="campus-map-layout">
+            <div class="campus-map-stage">
+                <div id="campus-live-map" class="campus-live-map"></div>
+                <div class="campus-map-legend">
+                    <span><i class="legend-dot legend-danger"></i> High risk</span>
+                    <span><i class="legend-dot legend-warning"></i> Moderate</span>
+                    <span><i class="legend-dot legend-success"></i> Lower</span>
+                    <span><i class="legend-line"></i> Patrol route</span>
+                </div>
+            </div>
+            <div class="campus-map-sidebar">
+                <div class="campus-map-id">
+                    <strong>{{ safety.map.name }}</strong>
+                    <p>{{ safety.map.address }}</p>
+                    <p class="campus-map-streets"><i class="fas fa-road"></i> Topaz Street · Sapphire Street</p>
+                </div>
+                <h3 class="campus-map-list-title">Checkpoints on map</h3>
+                <div class="campus-map-checkpoint-list">
+                {% for cp in safety.map.points %}
+                    <button type="button" class="campus-map-cp" data-map-focus="{{ cp.code }}" data-lat="{{ cp.lat }}" data-lng="{{ cp.lng }}">
+                        <span class="cp-code risk-{{ cp.tone }}">{{ cp.code }}</span>
+                        <span class="cp-meta">
+                            <strong>{{ cp.name }}</strong>
+                            <small>Risk {{ cp.risk }} · {{ cp.lat|round(5) }}, {{ cp.lng|round(5) }}</small>
+                        </span>
+                    </button>
+                {% else %}
+                    <p class="empty-module-note">No checkpoint coordinates available.</p>
+                {% endfor %}
+                </div>
+            </div>
+        </div>
         <script type="application/json" id="campus-map-data">{{ safety.map|tojson }}</script>
     </div>
     <div class="panel-card">
@@ -532,38 +562,79 @@ document.addEventListener('click', function (event) {
   if (!el || !raw || typeof L === 'undefined') return;
   var data;
   try { data = JSON.parse(raw.textContent); } catch (e) { return; }
+
   var center = data.center || [14.72632, 121.03601];
-  var map = L.map(el).setView(center, data.zoom || 18);
+  var map = L.map(el, { scrollWheelZoom: false }).setView(center, data.zoom || 18);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 20,
-    attribution: '&copy; OpenStreetMap · BCP MV Campus'
+    attribution: '&copy; OpenStreetMap'
   }).addTo(map);
-  if (data.name) {
-    var caption = L.control({ position: 'topright' });
-    caption.onAdd = function () {
-      var div = L.DomUtil.create('div', 'campus-map-caption');
-      div.innerHTML = '<strong>' + data.name + '</strong>';
-      return div;
-    };
-    caption.addTo(map);
-  }
+
   var colors = { danger: '#dc2626', warning: '#d97706', success: '#0f766e' };
+  var markersByCode = {};
+  var bounds = [];
+
   (data.points || []).forEach(function (p) {
     if (p.lat == null || p.lng == null) return;
-    var marker = L.circleMarker([p.lat, p.lng], {
-      radius: 9,
-      color: '#fff',
-      weight: 2,
-      fillColor: colors[p.tone] || '#2563eb',
-      fillOpacity: 0.95
-    }).addTo(map);
-    marker.bindPopup('<strong>' + p.code + ' · ' + p.name + '</strong><br>Risk ' + p.risk);
+    var color = colors[p.tone] || '#2563eb';
+    var icon = L.divIcon({
+      className: 'cp-marker',
+      html: '<div class="cp-marker-pin" style="--cp-color:' + color + '"><span>' + p.code + '</span><small>Risk ' + p.risk + '</small></div>',
+      iconSize: [72, 44],
+      iconAnchor: [36, 44]
+    });
+    var marker = L.marker([p.lat, p.lng], { icon: icon }).addTo(map);
+    marker.bindPopup(
+      '<div class="cp-popup">' +
+        '<strong>' + p.code + ' · ' + p.name + '</strong>' +
+        '<div>Risk score: <b>' + p.risk + '</b></div>' +
+        '<div>' + Number(p.lat).toFixed(5) + ', ' + Number(p.lng).toFixed(5) + '</div>' +
+        '<div class="cp-popup-campus">' + (data.name || 'BCP MV Campus') + '</div>' +
+      '</div>'
+    );
+    markersByCode[p.code] = marker;
+    bounds.push([p.lat, p.lng]);
   });
-  if (data.geometry && data.geometry.coordinates && data.geometry.coordinates.length) {
-    var latlngs = data.geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
-    L.polyline(latlngs, { color: '#277e72', weight: 5, opacity: 0.9 }).addTo(map);
-    map.fitBounds(latlngs, { padding: [24, 24] });
+
+  if (bounds.length) {
+    var campusPad = 0.00045;
+    var lats = bounds.map(function (b) { return b[0]; });
+    var lngs = bounds.map(function (b) { return b[1]; });
+    var campusRect = [
+      [Math.min.apply(null, lats) - campusPad, Math.min.apply(null, lngs) - campusPad],
+      [Math.max.apply(null, lats) + campusPad, Math.max.apply(null, lngs) + campusPad]
+    ];
+    L.rectangle(campusRect, {
+      color: '#173d67',
+      weight: 2,
+      dashArray: '6 4',
+      fillColor: '#277e72',
+      fillOpacity: 0.08
+    }).addTo(map).bindTooltip(data.name || 'BCP MV Campus', { permanent: false });
   }
+
+  if (data.geometry && data.geometry.coordinates && data.geometry.coordinates.length > 1) {
+    var latlngs = data.geometry.coordinates.map(function (c) { return [c[1], c[0]]; });
+    L.polyline(latlngs, { color: '#0f766e', weight: 4, opacity: 0.95 }).addTo(map);
+  }
+
+  if (bounds.length) {
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 19 });
+  }
+
+  setTimeout(function () { map.invalidateSize(); }, 120);
+
+  document.querySelectorAll('[data-map-focus]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var code = btn.getAttribute('data-map-focus');
+      var marker = markersByCode[code];
+      if (!marker) return;
+      map.setView(marker.getLatLng(), 19, { animate: true });
+      marker.openPopup();
+      document.querySelectorAll('.campus-map-cp').forEach(function (el) { el.classList.remove('active'); });
+      btn.classList.add('active');
+    });
+  });
 })();
 </script>
 {% endblock %}
