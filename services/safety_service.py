@@ -5,10 +5,10 @@ import json
 import os
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 
-from flask import current_app
+from flask import current_app, url_for
 from werkzeug.utils import secure_filename
 
 from models.database import execute, query_all, query_one
@@ -299,7 +299,205 @@ def _operational_metrics():
             "readiness": readiness, "avg_response": f"{max(0, round(float(minutes))):02d}m" if minutes is not None else "—"}
 
 
-def get_safety_dashboard(section="overview"):
+def _fill_daily_series(rows, days, value_keys=("count",)):
+    """Ensure a continuous day series for charts (missing days = 0)."""
+    by_day = {}
+    for row in rows or []:
+        day = row.get("day")
+        if hasattr(day, "strftime"):
+            key = day.strftime("%Y-%m-%d")
+        else:
+            key = str(day)[:10]
+        by_day[key] = row
+    labels = []
+    series = {k: [] for k in value_keys}
+    for offset in range(days - 1, -1, -1):
+        day = (datetime.now() - timedelta(days=offset)).date()
+        key = day.strftime("%Y-%m-%d")
+        labels.append(day.strftime("%b %d"))
+        src = by_day.get(key) or {}
+        for k in value_keys:
+            series[k].append(int(src.get(k) or 0))
+    return labels, series
+
+
+def _build_dashboard_analytics(
+    *,
+    open_incidents,
+    counts,
+    high_priority,
+    patrol_meta,
+    operational,
+    readiness,
+    insp_compliance,
+    drill_completion,
+    zones,
+    on_duty_teams,
+    team_count,
+    actions_count,
+    avg_risk,
+):
+    """Cross-module chart payloads and interpretive insights for Command Dashboard."""
+    incident_rows = query_all(
+        """SELECT DATE(reported_at) AS day, COUNT(*) AS count
+           FROM incidents
+           WHERE reported_at >= CURDATE() - INTERVAL 13 DAY
+           GROUP BY DATE(reported_at)
+           ORDER BY day"""
+    )
+    incident_labels, incident_series = _fill_daily_series(incident_rows, 14)
+
+    status_order = ["reported", "verified", "responding", "resolved", "closed"]
+    status_labels = []
+    status_data = []
+    for key in status_order:
+        n = int(counts.get(key) or 0)
+        if n or key in ("reported", "verified", "responding", "resolved"):
+            status_labels.append(key.replace("_", " ").title())
+            status_data.append(n)
+
+    priority_rows = query_all(
+        """SELECT LOWER(COALESCE(priority, 'medium')) AS priority, COUNT(*) AS count
+           FROM incidents GROUP BY LOWER(COALESCE(priority, 'medium'))"""
+    ) or []
+    priority_map = {str(r["priority"]): int(r["count"] or 0) for r in priority_rows}
+    priority_order = ["low", "medium", "high", "critical"]
+    priority_labels = [p.title() for p in priority_order if priority_map.get(p) or p in ("low", "medium", "high")]
+    priority_data = [priority_map.get(p.lower(), 0) for p in [x.lower() for x in priority_labels]]
+
+    zone_labels = [z["name"] for z in (zones or [])[:5]]
+    zone_data = [int(z["score"]) for z in (zones or [])[:5]]
+    if not zone_labels:
+        zone_rows = query_all(
+            """SELECT zone_name AS name, ROUND(COALESCE(risk_score, 0)) AS score
+               FROM campus_zones WHERE active = 1
+               ORDER BY risk_score DESC LIMIT 5"""
+        ) or []
+        zone_labels = [r["name"] for r in zone_rows]
+        zone_data = [int(r["score"] or 0) for r in zone_rows]
+
+    patrol_rows = query_all(
+        """SELECT DATE(scanned_at) AS day,
+                  SUM(result = 'valid') AS valid,
+                  SUM(result IN ('missed', 'late', 'invalid')) AS missed
+           FROM patrol_logs
+           WHERE scanned_at >= CURDATE() - INTERVAL 6 DAY
+           GROUP BY DATE(scanned_at)
+           ORDER BY day"""
+    )
+    patrol_labels, patrol_series = _fill_daily_series(patrol_rows, 7, ("valid", "missed"))
+
+    module_rows = query_all(
+        """SELECT COALESCE(NULLIF(entity_type, ''), 'system') AS module, COUNT(*) AS count
+           FROM audit_logs
+           WHERE created_at >= NOW() - INTERVAL 30 DAY
+           GROUP BY COALESCE(NULLIF(entity_type, ''), 'system')
+           ORDER BY count DESC
+           LIMIT 6"""
+    ) or []
+    module_labels = [str(r["module"]).replace("_", " ").title() for r in module_rows]
+    module_data = [int(r["count"] or 0) for r in module_rows]
+    if not module_labels:
+        module_labels = ["Incidents", "Patrol", "Inspections", "System"]
+        module_data = [0, 0, 0, 0]
+
+    total_inc = sum(int(counts.get(k) or 0) for k in status_order)
+    resolved_rate = round(((counts.get("resolved", 0) + counts.get("closed", 0)) / total_inc) * 100) if total_inc else 100
+    module_health = {
+        "labels": ["Resolution", "Patrol", "Inspections", "Drills", "Readiness"],
+        "data": [resolved_rate, int(patrol_meta.get("coverage") or 0), int(insp_compliance), int(drill_completion), int(readiness)],
+        "targets": [85, 90, 80, 80, 85],
+    }
+
+    inspection_status = query_all(
+        """SELECT status, COUNT(*) AS count FROM safety_inspections GROUP BY status"""
+    ) or []
+    insp_labels = [str(r["status"]).replace("_", " ").title() for r in inspection_status]
+    insp_data = [int(r["count"] or 0) for r in inspection_status]
+
+    team_duty = {
+        "labels": ["On duty", "Standby"],
+        "data": [int(on_duty_teams), max(0, int(team_count) - int(on_duty_teams))],
+    }
+
+    # Interpretive insights across modules
+    insights = []
+    if open_incidents:
+        tone = "danger" if open_incidents >= 5 or high_priority else "warning"
+        insights.append({
+            "module": "Incidents",
+            "title": f"{open_incidents:02d} open in the response queue",
+            "text": f"{high_priority} high/critical and {counts.get('responding', 0)} actively responding. Avg response {operational.get('avg_response', '—')}.",
+            "tone": tone,
+            "url": url_for("safety.incidents"),
+        })
+    else:
+        insights.append({
+            "module": "Incidents",
+            "title": "Incident queue is clear",
+            "text": f"No open incidents. Resolution rate {resolved_rate}% across {total_inc} historical records.",
+            "tone": "success",
+            "url": url_for("safety.incidents"),
+        })
+
+    coverage = int(patrol_meta.get("coverage") or 0)
+    insights.append({
+        "module": "Patrol",
+        "title": f"Coverage at {coverage}% this week",
+        "text": f"{patrol_meta.get('completed', 0)} routes completed · {patrol_meta.get('missed', 0)} missed scans · {patrol_meta.get('active_routes', 0)} active.",
+        "tone": "success" if coverage >= 90 else ("warning" if coverage >= 70 else "danger"),
+        "url": url_for("safety.patrol"),
+    })
+
+    top_zone = zones[0] if zones else None
+    if top_zone:
+        insights.append({
+            "module": "Risk",
+            "title": f"{top_zone['name']} leads campus risk",
+            "text": f"Score {top_zone['score']} · {top_zone.get('incidents', 'no open nearby')}. Avg checkpoint risk {avg_risk}.",
+            "tone": top_zone.get("tone") or "warning",
+            "url": url_for("safety.patrol"),
+        })
+
+    insights.append({
+        "module": "Compliance",
+        "title": f"Campus readiness {readiness}%",
+        "text": f"Inspections {insp_compliance}% · drills {drill_completion}% · {actions_count} open OSAS actions · {on_duty_teams}/{team_count} teams on duty.",
+        "tone": "success" if readiness >= 80 else ("warning" if readiness >= 60 else "danger"),
+        "url": url_for("safety.inspections"),
+    })
+
+    summary = {
+        "incident_total": total_inc,
+        "open_incidents": open_incidents,
+        "resolved_rate": resolved_rate,
+        "patrol_coverage": coverage,
+        "readiness": readiness,
+        "avg_response": operational.get("avg_response", "—"),
+        "avg_risk": avg_risk,
+        "actions_open": actions_count,
+    }
+
+    return {
+        "incident_trend": {"labels": incident_labels, "data": incident_series["count"]},
+        "incident_status": {"labels": status_labels, "data": status_data},
+        "incident_priority": {"labels": priority_labels, "data": priority_data},
+        "zone_risk": {"labels": zone_labels, "data": zone_data},
+        "patrol_trend": {
+            "labels": patrol_labels,
+            "valid": patrol_series["valid"],
+            "missed": patrol_series["missed"],
+        },
+        "module_activity": {"labels": module_labels, "data": module_data},
+        "module_health": module_health,
+        "inspection_status": {"labels": insp_labels or ["None"], "data": insp_data or [0]},
+        "team_duty": team_duty,
+        "insights": insights,
+        "summary": summary,
+    }
+
+
+def get_safety_dashboard(section="overview", status_filter=None):
     ensure_campus_seed()
     try:
         risk_scoring.refresh_all_risk_scores()
@@ -307,6 +505,7 @@ def get_safety_dashboard(section="overview"):
         pass
 
     incidents = _incident_rows()
+    all_incidents = incidents
     checkpoints = _checkpoint_rows()
     all_checkpoints = checkpoints
     display_checkpoints = [c for c in checkpoints if c["code"] != "SEC"]
@@ -504,67 +703,100 @@ def get_safety_dashboard(section="overview"):
             "code": z["zone_code"],
         })
 
-    open_incidents = sum(1 for i in incidents if i["status_key"] in ("reported", "verified", "responding"))
+    open_incidents = sum(1 for i in all_incidents if i["status_key"] in ("reported", "verified", "responding"))
+    high_priority = sum(1 for i in all_incidents if i.get("priority") in ("high", "critical") and i["status_key"] not in ("resolved", "closed"))
     guards = query_one("SELECT COUNT(*) AS c FROM users WHERE role IN ('guard','security_head') AND account_status='active'")["c"]
     operational = _operational_metrics()
     readiness = operational["readiness"]
     avg_risk = round(sum(c["risk"] for c in display_checkpoints) / max(1, len(display_checkpoints)), 1) if display_checkpoints else 0
+    on_duty_teams = sum(1 for t in teams if t["status"] == "On duty")
+    insp_scheduled = sum(1 for i in inspections if i["status"] == "Scheduled")
+    insp_completed = sum(1 for i in inspections if i["status"] == "Completed")
+    insp_followups = sum(1 for i in inspections if i["status"] == "Follow-up")
+    insp_compliance = round((insp_completed / len(inspections)) * 100) if inspections else 100
+    drills_upcoming = sum(1 for d in drills if d["status"] in ("Planned", "Scheduled"))
+    drills_completed = sum(1 for d in drills if d["status"] == "Completed")
+    drill_completion = round((drills_completed / len(drills)) * 100) if drills else 100
+    active_plans = sum(1 for p in plans if p["status"] == "Approved")
+    activity_today = sum(1 for a in activity if str(a.get("detail", "")).startswith("Today"))
+    modules_touched = len({(a.get("module") or "system").lower() for a in activity})
 
-    counts = {"reported": 0, "verified": 0, "responding": 0, "resolved": 0}
-    for i in incidents:
+    counts = {"reported": 0, "verified": 0, "responding": 0, "resolved": 0, "closed": 0}
+    for i in all_incidents:
         counts[i["status_key"]] = counts.get(i["status_key"], 0) + 1
+    resolved_closed = counts.get("resolved", 0) + counts.get("closed", 0)
+
+    if status_filter in counts:
+        incidents = [i for i in all_incidents if i["status_key"] == status_filter]
+
+    u = {
+        "overview": url_for("safety.index"),
+        "incidents": url_for("safety.incidents"),
+        "inspections": url_for("safety.inspections"),
+        "osas": url_for("safety.osas"),
+        "emergency": url_for("safety.emergency"),
+        "patrol": url_for("safety.patrol"),
+        "teams": url_for("safety.teams"),
+        "reports": url_for("safety.reports"),
+        "activity": url_for("safety.activity"),
+    }
 
     kpi_catalog = {
         "overview": [
-            {"label": "Open Incidents", "value": f"{open_incidents:02d}", "hint": f"{counts.get('responding', 0)} responding", "theme": "red", "icon": "fa-triangle-exclamation"},
-            {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": f"{patrol_meta['completed']} completed routes", "theme": "emerald", "icon": "fa-route"},
-            {"label": "Campus Risk Index", "value": str(avg_risk), "hint": "Decay-weighted", "theme": "amber", "icon": "fa-gauge-high"},
-            {"label": "Guards on Duty", "value": f"{guards}", "hint": f"{len(teams)} teams", "theme": "indigo", "icon": "fa-user-shield"},
+            {"label": "Open Incidents", "value": f"{open_incidents:02d}", "hint": f"{counts.get('responding', 0)} responding now", "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
+            {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": f"{patrol_meta['completed']} of {patrol_meta['planned']} routes", "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
+            {"label": "Campus Readiness", "value": f"{readiness}%", "hint": f"{len(actions)} open OSAS items", "theme": "amber", "icon": "fa-shield-heart", "url": u["emergency"]},
+            {"label": "Teams On Duty", "value": f"{on_duty_teams:02d}", "hint": f"{guards} security staff", "theme": "indigo", "icon": "fa-user-shield", "url": u["teams"]},
         ],
         "incidents": [
-            {"label": "Reported", "value": f"{counts.get('reported', 0):02d}", "hint": "Awaiting verification", "theme": "red", "icon": "fa-bullhorn"},
-            {"label": "Verified", "value": f"{counts.get('verified', 0):02d}", "hint": "Ready for dispatch", "theme": "amber", "icon": "fa-user-check"},
-            {"label": "Responding", "value": f"{counts.get('responding', 0):02d}", "hint": "Teams on scene", "theme": "indigo", "icon": "fa-person-running"},
-            {"label": "Resolved", "value": f"{counts.get('resolved', 0):02d}", "hint": "Closed or resolved", "theme": "emerald", "icon": "fa-check"},
+            {"label": "Reported", "value": f"{counts.get('reported', 0):02d}", "hint": "Awaiting verification", "theme": "red", "icon": "fa-bullhorn", "url": f"{u['incidents']}?status=reported"},
+            {"label": "Verified", "value": f"{counts.get('verified', 0):02d}", "hint": "Ready for dispatch", "theme": "amber", "icon": "fa-user-check", "url": f"{u['incidents']}?status=verified"},
+            {"label": "Responding", "value": f"{counts.get('responding', 0):02d}", "hint": "Teams on scene", "theme": "indigo", "icon": "fa-person-running", "url": f"{u['incidents']}?status=responding"},
+            {"label": "High Priority", "value": f"{high_priority:02d}", "hint": f"{resolved_closed} resolved · avg {operational['avg_response']}", "theme": "amber", "icon": "fa-bolt", "url": f"{u['incidents']}#incident-queue"},
         ],
         "inspections": [
-            {"label": "Scheduled", "value": f"{sum(1 for i in inspections if i['status']=='Scheduled'):02d}", "hint": "Upcoming", "theme": "indigo", "icon": "fa-calendar-check"},
-            {"label": "Register", "value": f"{len(inspections):02d}", "hint": "Total records", "theme": "emerald", "icon": "fa-clipboard-check"},
-            {"label": "Follow-ups", "value": f"{sum(1 for i in inspections if i['status']=='Follow-up'):02d}", "hint": "Corrective actions", "theme": "amber", "icon": "fa-wrench"},
-            {"label": "Open risks", "value": f"{len(actions):02d}", "hint": "OSAS queue", "theme": "red", "icon": "fa-triangle-exclamation"},
+            {"label": "Scheduled", "value": f"{insp_scheduled:02d}", "hint": "Upcoming inspections", "theme": "indigo", "icon": "fa-calendar-check", "url": f"{u['inspections']}#inspection-register"},
+            {"label": "Completed", "value": f"{insp_completed:02d}", "hint": f"{insp_compliance}% compliance", "theme": "emerald", "icon": "fa-clipboard-check", "url": f"{u['inspections']}#inspection-register"},
+            {"label": "Follow-ups", "value": f"{insp_followups:02d}", "hint": "Overdue / corrective", "theme": "amber", "icon": "fa-wrench", "url": f"{u['inspections']}#inspection-register"},
+            {"label": "Open Risks", "value": f"{len(actions):02d}", "hint": "Hazards & restocks", "theme": "red", "icon": "fa-triangle-exclamation", "url": f"{u['inspections']}#osas-actions"},
+        ],
+        "osas": [
+            {"label": "Open Risks", "value": f"{len(actions):02d}", "hint": "OSAS action queue", "theme": "red", "icon": "fa-triangle-exclamation", "url": f"{u['osas']}#osas-actions"},
+            {"label": "Follow-ups", "value": f"{insp_followups:02d}", "hint": "Inspection corrective", "theme": "amber", "icon": "fa-wrench", "url": f"{u['osas']}#inspection-register"},
+            {"label": "Due Soon", "value": f"{insp_scheduled:02d}", "hint": "Scheduled inspections", "theme": "indigo", "icon": "fa-calendar-check", "url": f"{u['osas']}#inspection-register"},
+            {"label": "Readiness", "value": f"{readiness}%", "hint": "Campus preparedness", "theme": "emerald", "icon": "fa-shield-heart", "url": u["emergency"]},
         ],
         "emergency": [
-            {"label": "Planned drills", "value": f"{sum(1 for d in drills if d['status'] in ('Planned','Scheduled')):02d}", "hint": "Calendar", "theme": "indigo", "icon": "fa-calendar-days"},
-            {"label": "Drill register", "value": f"{len(drills):02d}", "hint": "All events", "theme": "emerald", "icon": "fa-check-double"},
-            {"label": "Evacuation plans", "value": f"{len(plans):02d}", "hint": "Buildings covered", "theme": "amber", "icon": "fa-map"},
-            {"label": "Readiness", "value": f"{readiness}%", "hint": "Preparedness index", "theme": "emerald", "icon": "fa-users"},
+            {"label": "Upcoming Drills", "value": f"{drills_upcoming:02d}", "hint": "Planned / scheduled", "theme": "indigo", "icon": "fa-calendar-days", "url": f"{u['emergency']}#drill-register"},
+            {"label": "Completed Drills", "value": f"{drills_completed:02d}", "hint": f"{drill_completion}% drill rate", "theme": "emerald", "icon": "fa-check-double", "url": f"{u['emergency']}#drill-register"},
+            {"label": "Active Plans", "value": f"{active_plans:02d}", "hint": f"{len(plans)} total on file", "theme": "amber", "icon": "fa-map", "url": f"{u['emergency']}#evac-plans"},
+            {"label": "Readiness", "value": f"{readiness}%", "hint": "Inspections + drills + risk", "theme": "emerald", "icon": "fa-shield-heart", "url": f"{u['emergency']}#drill-register"},
         ],
         "patrol": [
-            {"label": "Coverage", "value": f"{patrol_meta['coverage']}%", "hint": "This week", "theme": "emerald", "icon": "fa-route"},
-            {"label": "Completed", "value": f"{patrol_meta['completed']}", "hint": f"Of {patrol_meta['planned']} routes", "theme": "indigo", "icon": "fa-flag-checkered"},
-            {"label": "Missed scans", "value": f"{patrol_meta['missed']:02d}", "hint": "Patrol logs", "theme": "red", "icon": "fa-circle-xmark"},
-            {"label": "Active routes", "value": f"{patrol_meta['active_routes']:02d}", "hint": patrol_meta["engine"], "theme": "amber", "icon": "fa-location-arrow"},
+            {"label": "Coverage", "value": f"{patrol_meta['coverage']}%", "hint": "Valid scans this week", "theme": "emerald", "icon": "fa-route", "url": f"{u['patrol']}#route-performance"},
+            {"label": "Completed", "value": f"{patrol_meta['completed']}", "hint": f"Of {patrol_meta['planned']} planned routes", "theme": "indigo", "icon": "fa-flag-checkered", "url": f"{u['patrol']}#route-performance"},
+            {"label": "Missed Scans", "value": f"{patrol_meta['missed']:02d}", "hint": "Late / invalid / missed", "theme": "red", "icon": "fa-circle-xmark", "url": f"{u['patrol']}#route-performance"},
+            {"label": "Active Routes", "value": f"{patrol_meta['active_routes']:02d}", "hint": patrol_meta.get("assigned_team") or patrol_meta["engine"], "theme": "amber", "icon": "fa-location-arrow", "url": f"{u['patrol']}#route-board"},
         ],
         "teams": [
-            {"label": "Teams", "value": f"{len(teams):02d}", "hint": "Active registry", "theme": "indigo", "icon": "fa-users"},
-            {"label": "Checkpoints", "value": f"{len(checkpoints)}", "hint": "QR / NFC / GPS", "theme": "amber", "icon": "fa-location-crosshairs"},
-            {"label": "Guards", "value": f"{guards}", "hint": "Security roles", "theme": "emerald", "icon": "fa-user-shield"},
-            {"label": "Avg risk", "value": str(avg_risk), "hint": "Checkpoint-weighted", "theme": "red", "icon": "fa-gauge-high"},
+            {"label": "Teams", "value": f"{len(teams):02d}", "hint": "Active registry", "theme": "indigo", "icon": "fa-users", "url": f"{u['teams']}#teams-panel"},
+            {"label": "On Duty", "value": f"{on_duty_teams:02d}", "hint": "Active shifts now", "theme": "emerald", "icon": "fa-user-check", "url": f"{u['teams']}#teams-panel"},
+            {"label": "Guards", "value": f"{guards}", "hint": "Guard + security head", "theme": "amber", "icon": "fa-user-shield", "url": f"{u['teams']}#teams-panel"},
+            {"label": "Checkpoints", "value": f"{len(display_checkpoints)}", "hint": f"Avg risk {avg_risk}", "theme": "red", "icon": "fa-location-crosshairs", "url": f"{u['teams']}#checkpoints-panel"},
         ],
         "reports": [
-            {"label": "Incidents open", "value": f"{open_incidents:02d}", "hint": "Live queue", "theme": "red", "icon": "fa-triangle-exclamation"},
-            {"label": "Patrol coverage", "value": f"{patrol_meta['coverage']}%", "hint": "Target 90%", "theme": "emerald", "icon": "fa-route"},
-            {"label": "Avg risk index", "value": str(avg_risk), "hint": "Decay model", "theme": "amber", "icon": "fa-gauge-high"},
-            {"label": "Audit entries", "value": f"{len(activity):02d}", "hint": "Recent actions", "theme": "indigo", "icon": "fa-list-check"},
+            {"label": "Incident Records", "value": f"{len(all_incidents):02d}", "hint": f"{open_incidents} still open", "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
+            {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": "Weekly completion", "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
+            {"label": "Inspection Rate", "value": f"{insp_compliance}%", "hint": f"{insp_completed}/{len(inspections)} completed", "theme": "amber", "icon": "fa-clipboard-check", "url": u["inspections"]},
+            {"label": "Drill Completion", "value": f"{drill_completion}%", "hint": f"{drills_completed}/{len(drills)} drills done", "theme": "indigo", "icon": "fa-person-running", "url": u["emergency"]},
         ],
         "activity": [
-            {"label": "Audit entries", "value": f"{len(activity):02d}", "hint": "Rolling feed", "theme": "amber", "icon": "fa-list-check"},
-            {"label": "Open incidents", "value": f"{open_incidents:02d}", "hint": "Cross-module", "theme": "red", "icon": "fa-triangle-exclamation"},
-            {"label": "Active routes", "value": f"{patrol_meta['active_routes']:02d}", "hint": "Patrol", "theme": "emerald", "icon": "fa-route"},
-            {"label": "Inspections", "value": f"{len(inspections):02d}", "hint": "Register", "theme": "indigo", "icon": "fa-clipboard-check"},
+            {"label": "Recent Actions", "value": f"{len(activity):02d}", "hint": "Audit feed window", "theme": "amber", "icon": "fa-list-check", "url": f"{u['activity']}#activity-feed"},
+            {"label": "Today", "value": f"{activity_today:02d}", "hint": f"{modules_touched} modules touched", "theme": "indigo", "icon": "fa-clock", "url": f"{u['activity']}#activity-feed"},
+            {"label": "Open Incidents", "value": f"{open_incidents:02d}", "hint": "Needs response", "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
+            {"label": "Active Routes", "value": f"{patrol_meta['active_routes']:02d}", "hint": "Patrol in progress", "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
         ],
     }
-    kpi_catalog["osas"] = kpi_catalog["inspections"]
 
     trends = [
         {"title": f"Open incidents at {open_incidents:02d}", "detail": "Synced from Incident Response"},
@@ -607,6 +839,24 @@ def get_safety_dashboard(section="overview"):
         for c in all_checkpoints if c["lat"] is not None and c["lng"] is not None
     ]
 
+    analytics = None
+    if section == "overview":
+        analytics = _build_dashboard_analytics(
+            open_incidents=open_incidents,
+            counts=counts,
+            high_priority=high_priority,
+            patrol_meta=patrol_meta,
+            operational=operational,
+            readiness=readiness,
+            insp_compliance=insp_compliance,
+            drill_completion=drill_completion,
+            zones=zones,
+            on_duty_teams=on_duty_teams,
+            team_count=len(teams_options),
+            actions_count=len(actions),
+            avg_risk=avg_risk,
+        )
+
     return {
         "date_label": datetime.now().strftime("%A, %B %d, %Y"),
         "section": section,
@@ -641,6 +891,7 @@ def get_safety_dashboard(section="overview"):
         "pagination": pagination,
         "hero": {"checkpoints": len(all_checkpoints), "readiness": readiness, "avg_response": operational["avg_response"]},
         "report_types": report_types,
+        "analytics": analytics,
         "map": {
             "center": [
                 current_app.config.get("CAMPUS_MAP_LAT", MV_CENTER_LAT),

@@ -188,16 +188,169 @@ function initModuleCharts(modules, prefix = '') {
     createDoughnut(`${p}chart-users`, users.labels, users.data);
 }
 
-function initPersonalCharts(modules, prefix = 'personal') {
-    if (!modules) return;
-    const p = `${prefix}-`;
+function createHorizontalBar(canvasId, labels, data, options = {}) {
+    const el = document.getElementById(canvasId);
+    if (!el || !labels.length) return null;
+    return trackChart(new Chart(el, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                data,
+                backgroundColor: labels.map((_, i) => CHART_PALETTE[i % CHART_PALETTE.length]),
+                borderRadius: 6,
+                borderSkipped: false,
+            }],
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } } },
+                y: { grid: { display: false }, ticks: { font: { size: 11 } } },
+            },
+            ...options,
+        },
+    }));
+}
 
-    const borrowing = rowsToChart(modules.borrowing?.by_status, 'status');
-    createDoughnut(`${p}chart-borrowing`, borrowing.labels, borrowing.data);
+function createMultiLine(canvasId, labels, datasets, options = {}) {
+    const el = document.getElementById(canvasId);
+    if (!el || !labels.length || !datasets?.length) return null;
+    const styles = [
+        { borderColor: CHART_COLORS.emerald, backgroundColor: 'rgba(5, 150, 105, 0.12)', borderDash: [] },
+        { borderColor: CHART_COLORS.red, backgroundColor: 'rgba(220, 38, 38, 0.08)', borderDash: [6, 4] },
+        { borderColor: CHART_COLORS.indigo, backgroundColor: 'rgba(79, 70, 229, 0.1)', borderDash: [] },
+    ];
+    return trackChart(new Chart(el, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: datasets.map((ds, i) => ({
+                label: ds.label,
+                data: ds.data,
+                borderColor: styles[i % styles.length].borderColor,
+                backgroundColor: styles[i % styles.length].backgroundColor,
+                borderDash: styles[i % styles.length].borderDash,
+                fill: true,
+                tension: 0.35,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                pointBackgroundColor: styles[i % styles.length].borderColor,
+            })),
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { boxWidth: 10, padding: 12, font: { size: 11 } },
+                },
+            },
+            scales: {
+                x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+                y: { beginAtZero: true, ticks: { precision: 0, font: { size: 11 } } },
+            },
+            ...options,
+        },
+    }));
+}
 
-    const reservations = rowsToChart(modules.reservations?.by_status, 'status');
-    createDoughnut(`${p}chart-reservations`, reservations.labels, reservations.data);
+function createRadar(canvasId, labels, data, targets = [], options = {}) {
+    const el = document.getElementById(canvasId);
+    if (!el || !labels.length) return null;
+    const datasets = [{
+        label: 'Current',
+        data,
+        borderColor: CHART_COLORS.indigo,
+        backgroundColor: 'rgba(79, 70, 229, 0.18)',
+        pointBackgroundColor: CHART_COLORS.indigo,
+        pointRadius: 3,
+        borderWidth: 2,
+    }];
+    if (targets?.length) {
+        datasets.push({
+            label: 'Target',
+            data: targets,
+            borderColor: CHART_COLORS.slate,
+            backgroundColor: 'rgba(100, 116, 139, 0.06)',
+            borderDash: [5, 4],
+            pointRadius: 0,
+            borderWidth: 1.5,
+        });
+    }
+    return trackChart(new Chart(el, {
+        type: 'radar',
+        data: { labels, datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { boxWidth: 10, padding: 12, font: { size: 11 } },
+                },
+            },
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: { display: false, stepSize: 20 },
+                    pointLabels: { font: { size: 11 } },
+                    grid: { color: 'rgba(148, 163, 184, 0.35)' },
+                },
+            },
+            ...options,
+        },
+    }));
+}
 
-    const fines = rowsToChart(modules.fines?.by_status, 'status', 'total');
-    createBar(`${p}chart-fines`, fines.labels, fines.data);
+function ensureChartSeries(payload, fallbackLabel = 'No data') {
+    if (!payload) return { labels: [fallbackLabel], data: [0] };
+    const labels = payload.labels || [];
+    const data = payload.data || [];
+    if (!labels.length) return { labels: [fallbackLabel], data: [0] };
+    return { labels, data };
+}
+
+function initSafetyDashboardCharts(analytics) {
+    if (!analytics || typeof Chart === 'undefined') return;
+    destroyCharts();
+
+    const trend = ensureChartSeries(analytics.incident_trend);
+    createLine('chart-incident-trend', trend.labels, trend.data);
+
+    const status = ensureChartSeries(analytics.incident_status);
+    createDoughnut('chart-incident-status', status.labels, status.data);
+
+    const priority = ensureChartSeries(analytics.incident_priority);
+    createBar('chart-incident-priority', priority.labels, priority.data);
+
+    const zones = ensureChartSeries(analytics.zone_risk);
+    createHorizontalBar('chart-zone-risk', zones.labels, zones.data);
+
+    const patrol = analytics.patrol_trend || {};
+    if (patrol.labels?.length) {
+        createMultiLine('chart-patrol-trend', patrol.labels, [
+            { label: 'Valid scans', data: patrol.valid || [] },
+            { label: 'Missed / late', data: patrol.missed || [] },
+        ]);
+    }
+
+    const modules = ensureChartSeries(analytics.module_activity);
+    createDoughnut('chart-module-activity', modules.labels, modules.data);
+
+    const health = analytics.module_health || {};
+    if (health.labels?.length) {
+        createRadar('chart-module-health', health.labels, health.data || [], health.targets || []);
+    }
+
+    const inspections = ensureChartSeries(analytics.inspection_status);
+    createBar('chart-inspection-status', inspections.labels, inspections.data);
+
+    const duty = ensureChartSeries(analytics.team_duty);
+    createDoughnut('chart-team-duty', duty.labels, duty.data);
 }

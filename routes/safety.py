@@ -60,13 +60,15 @@ def page(section='overview'):
     if current_app.config.get('TESTING'):
         return 'Incident response test page', 200
     meta = SECTION_META.get(section, SECTION_META['overview'])
+    status_filter = request.args.get('status') if section == 'incidents' else None
     return render_template(
         'safety/index.html',
-        safety=safety_svc.get_safety_dashboard(section),
+        safety=safety_svc.get_safety_dashboard(section, status_filter=status_filter),
         section=section,
         breadcrumbs=[(meta['title'], None)],
         page_title=meta['title'],
         page_subtitle_text=meta['subtitle'],
+        status_filter=status_filter,
     )
 
 

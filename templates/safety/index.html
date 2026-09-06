@@ -62,6 +62,19 @@
 
 <div class="dashboard-stats grid-4 mb-6">
 {% for card in safety.kpis %}
+    {% if card.url %}
+    <a href="{{ card.url }}" class="stat-card stat-card-link{% if card.theme %} stat-{{ card.theme }}{% endif %}"{% if status_filter and ('status=' ~ status_filter) in card.url %} aria-current="true"{% endif %}>
+        <div class="stat-card-inner">
+            <div class="stat-icon {{ card.theme }}"><i class="fas {{ card.icon }}"></i></div>
+            <div class="stat-body">
+                <p class="stat-label">{{ card.label }}</p>
+                <p class="stat-value {{ card.theme }}">{{ card.value }}</p>
+                {% if card.hint %}<span class="kpi-hint">{{ card.hint }}</span>{% endif %}
+            </div>
+            <span class="stat-card-chevron" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
+        </div>
+    </a>
+    {% else %}
     <div class="stat-card{% if card.theme %} stat-{{ card.theme }}{% endif %}">
         <div class="stat-card-inner">
             <div class="stat-icon {{ card.theme }}"><i class="fas {{ card.icon }}"></i></div>
@@ -72,10 +85,104 @@
             </div>
         </div>
     </div>
+    {% endif %}
 {% endfor %}
 </div>
 
 {% if section == 'overview' %}
+{% if safety.analytics %}
+<section class="command-analytics mb-6" aria-label="Cross-module analytics">
+    <div class="section-header analytics-section-header">
+        <div>
+            <h2 class="section-title"><i class="fas fa-chart-pie"></i> Command analytics</h2>
+            <p class="section-subtitle">Live interpretation across incidents, patrol, inspections, emergency, and teams</p>
+        </div>
+        <a href="{{ url_for('safety.reports') }}" class="btn-action">Open reports</a>
+    </div>
+
+    <div class="analytics-summary-strip">
+        <div class="analytics-summary-item">
+            <span>Incident load</span>
+            <strong>{{ safety.analytics.summary.incident_total }}</strong>
+            <small>{{ '%02d'|format(safety.analytics.summary.open_incidents) }} open · {{ safety.analytics.summary.resolved_rate }}% resolved</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Patrol coverage</span>
+            <strong>{{ safety.analytics.summary.patrol_coverage }}%</strong>
+            <small>Target 90% · avg response {{ safety.analytics.summary.avg_response }}</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Readiness</span>
+            <strong>{{ safety.analytics.summary.readiness }}%</strong>
+            <small>{{ safety.analytics.summary.actions_open }} OSAS actions open</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Risk index</span>
+            <strong>{{ safety.analytics.summary.avg_risk }}</strong>
+            <small>Checkpoint-weighted campus average</small>
+        </div>
+    </div>
+
+    <div class="chart-grid chart-grid-safety mb-5">
+        <div class="chart-card chart-card-span-2">
+            <div class="chart-card-header"><i class="fas fa-wave-square"></i> Incident volume · last 14 days</div>
+            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chart-incident-trend" aria-label="Incident volume trend chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-circle-notch"></i> Incident pipeline</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-incident-status" aria-label="Incident status distribution chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-bolt"></i> Priority mix</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-incident-priority" aria-label="Incident priority chart"></canvas></div>
+        </div>
+        <div class="chart-card chart-card-span-2">
+            <div class="chart-card-header"><i class="fas fa-route"></i> Patrol scans · last 7 days</div>
+            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chart-patrol-trend" aria-label="Patrol scan trend chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-gauge-high"></i> Top risk zones</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-zone-risk" aria-label="Zone risk ranking chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-shield-halved"></i> Module health vs target</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-module-health" aria-label="Module health radar chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-list-check"></i> Activity by module · 30 days</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-module-activity" aria-label="Module activity chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-clipboard-check"></i> Inspection status</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-inspection-status" aria-label="Inspection status chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-user-shield"></i> Team duty status</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-team-duty" aria-label="Team duty status chart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="panel-card insights-panel">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title"><i class="fas fa-lightbulb"></i> Cross-module insights</h2>
+                <p class="section-subtitle">What the numbers mean for campus operations right now</p>
+            </div>
+        </div>
+        <div class="insights-grid">
+        {% for insight in safety.analytics.insights %}
+            <a href="{{ insight.url }}" class="insight-card insight-tone-{{ insight.tone }}">
+                <span class="insight-module-tag">{{ insight.module }}</span>
+                <p class="insight-title">{{ insight.title }}</p>
+                <p class="insight-text">{{ insight.text }}</p>
+            </a>
+        {% endfor %}
+        </div>
+    </div>
+    <script type="application/json" id="safety-analytics-data">{{ safety.analytics|tojson }}</script>
+</section>
+{% endif %}
+
 <div class="dashboard-grid safety-grid mb-6">
     <div class="panel-card campus-map-panel">
         <div class="section-header">
@@ -176,11 +283,14 @@
 </div>
 
 {% elif section == 'incidents' %}
-<div class="panel-card">
+<div class="panel-card" id="incident-queue">
     <div class="section-header">
         <div>
             <h2 class="section-title">Incident response queue</h2>
-            <p class="section-subtitle">Reported → Verified → Responding → Resolved → Closed</p>
+            <p class="section-subtitle">
+                Reported → Verified → Responding → Resolved → Closed
+                {% if status_filter %} · Showing <strong>{{ status_filter|replace('_', ' ')|title }}</strong> only · <a href="{{ url_for('safety.incidents') }}">Clear filter</a>{% endif %}
+            </p>
         </div>
         <a href="{{ url_for('safety.index') }}" class="btn-action">Command Dashboard</a>
     </div>
@@ -201,7 +311,7 @@
 
 {% elif section in ['inspections', 'osas'] %}
 <div class="dashboard-grid safety-grid">
-    <div class="panel-card">
+    <div class="panel-card" id="inspection-register">
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Safety inspection register</h2>
@@ -217,7 +327,7 @@
         {% endfor %}
         {{ render_pagination(safety.pagination.inspections) }}
     </div>
-    <div class="panel-card">
+    <div class="panel-card" id="osas-actions">
         <div class="section-header">
             <div>
                 <h2 class="section-title">OSAS action register</h2>
@@ -241,7 +351,7 @@
 
 {% elif section == 'emergency' %}
 <div class="dashboard-grid safety-grid">
-    <div class="panel-card">
+    <div class="panel-card" id="drill-register">
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-person-running"></i> Emergency drills</h2>
@@ -257,7 +367,7 @@
         {% endfor %}
         {{ render_pagination(safety.pagination.drills) }}
     </div>
-    <div class="panel-card">
+    <div class="panel-card" id="evac-plans">
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-map"></i> Evacuation plans</h2>
@@ -286,7 +396,7 @@
 </div>
 
 {% elif section == 'patrol' %}
-<div class="panel-card performance-panel mb-6">
+<div class="panel-card performance-panel mb-6" id="route-performance">
     <div class="section-header">
         <div>
             <h2 class="section-title">Route performance</h2>
@@ -317,7 +427,7 @@
         </div>
     </div>
 </div>
-<div class="panel-card route-board">
+<div class="panel-card route-board" id="route-board">
     <div class="section-header">
         <div>
             <h2 class="section-title">Recommended checkpoint sequence</h2>
@@ -357,7 +467,7 @@
 
 {% elif section == 'teams' %}
 <div class="dashboard-grid safety-grid">
-    <div class="panel-card">
+    <div class="panel-card" id="teams-panel">
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-users"></i> Patrol teams</h2>
@@ -374,7 +484,7 @@
         {% endfor %}
         {{ render_pagination(safety.pagination.teams) }}
     </div>
-    <div class="panel-card">
+    <div class="panel-card" id="checkpoints-panel">
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-location-crosshairs"></i> Checkpoints</h2>
@@ -443,7 +553,7 @@
 </div>
 
 {% elif section == 'activity' %}
-<div class="panel-card">
+<div class="panel-card" id="activity-feed">
     <div class="section-header">
         <div>
             <h2 class="section-title"><i class="fas fa-list-check"></i> System activity</h2>
@@ -524,6 +634,8 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 document.addEventListener('click', function (event) {
@@ -555,6 +667,16 @@ document.addEventListener('click', function (event) {
     }
   }
 });
+
+(function initSafetyAnalytics() {
+  var raw = document.getElementById('safety-analytics-data');
+  if (!raw || typeof initSafetyDashboardCharts !== 'function') return;
+  try {
+    initSafetyDashboardCharts(JSON.parse(raw.textContent));
+  } catch (err) {
+    console.warn('Safety analytics charts failed to load', err);
+  }
+})();
 
 (function initCampusMap() {
   var el = document.getElementById('campus-live-map');
