@@ -18,7 +18,9 @@ ENDPOINT_PERMISSIONS = {
     'safety.generate_route':'patrol.manage', 'safety.save_team':'patrol.manage', 'safety.save_checkpoint':'patrol.manage',
     'safety.export_report':'reports.manage', 'safety.update_incident':'safety.manage',
     'safety.attach_incident_file':'safety.manage', 'safety.notify_parent':'safety.manage', 'safety.scan_checkpoint':'patrol.manage',
+    'notification_read':'profile.manage_own', 'notifications_read_all':'profile.manage_own',
     'profile.index':'profile.manage_own', 'profile.update':'profile.manage_own', 'profile.upload_photo':'profile.manage_own', 'profile.remove_photo':'profile.manage_own',
+    'users.index':'users.manage', 'users.create':'users.manage', 'users.update':'users.manage', 'users.reset_password':'users.manage',
 }
 NAV_SECTIONS = [
     {'label':'Main','items':[{'label':'Command Dashboard','endpoint':'safety.index','icon':'fa-gauge-high','permission':'dashboard.view'}]},
@@ -34,6 +36,9 @@ NAV_SECTIONS = [
     {'label':'Reports & Governance','items':[
         {'label':'Reports & Analytics','endpoint':'safety.reports','icon':'fa-chart-line','permission':'reports.view'},
         {'label':'Activity Log','endpoint':'safety.activity','icon':'fa-list-check','permission':'reports.view'},
+    ]},
+    {'label':'Administration','items':[
+        {'label':'User Management','endpoint':'users.index','icon':'fa-users-gear','permission':'users.manage'},
     ]},
 ]
 STAFF_TOOL_ENDPOINTS = frozenset({'safety.index','safety.incidents','safety.inspections','safety.emergency','safety.patrol','safety.teams','safety.reports','safety.activity'})

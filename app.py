@@ -1,7 +1,7 @@
 from datetime import datetime
 import os
-from flask import Flask, render_template, request
-from flask_login import LoginManager, current_user
+from flask import Flask, jsonify, render_template, request
+from flask_login import LoginManager, current_user, login_required
 from flask_wtf.csrf import CSRFProtect
 from config import Config
 from models.database import close_db
@@ -10,7 +10,9 @@ from routes.auth import auth_bp
 from routes.dashboard import dashboard_bp
 from routes.safety import safety_bp
 from routes.profile import profile_bp
+from routes.users import users_bp
 from services.rbac import check_endpoint_access, get_forbidden_context, get_nav_for_role, get_role_label, has_permission, STAFF_TOOL_ENDPOINTS
+from services.notification_service import get_unread_count, get_user_notifications, mark_all_read, mark_read
 
 csrf = CSRFProtect()
 
@@ -26,7 +28,7 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id): return User.get_by_id(int(user_id))
     app.teardown_appcontext(close_db)
-    app.register_blueprint(auth_bp); app.register_blueprint(dashboard_bp); app.register_blueprint(safety_bp); app.register_blueprint(profile_bp)
+    app.register_blueprint(auth_bp); app.register_blueprint(dashboard_bp); app.register_blueprint(safety_bp); app.register_blueprint(profile_bp); app.register_blueprint(users_bp)
     @app.before_request
     def enforce_rbac():
         if current_user.is_authenticated and request.endpoint and not check_endpoint_access(request.endpoint):
@@ -36,12 +38,24 @@ def create_app():
     def inject_globals():
         if current_user.is_authenticated:
             role = current_user.role
-            return {'now':datetime.now(),'nav_sections':get_nav_for_role(role),'has_perm':lambda p:has_permission(role,p),'user_role':role,'role_label':get_role_label(role),'show_staff_banner':request.endpoint in STAFF_TOOL_ENDPOINTS,'notifications':[],'unread_count':0}
+            return {'now':datetime.now(),'nav_sections':get_nav_for_role(role),'has_perm':lambda p:has_permission(role,p),'user_role':role,'role_label':get_role_label(role),'show_staff_banner':request.endpoint in STAFF_TOOL_ENDPOINTS,'notifications':get_user_notifications(current_user.id),'unread_count':get_unread_count(current_user.id)}
         return {'now':datetime.now(),'nav_sections':[],'has_perm':lambda p:False,'user_role':None,'role_label':None,'show_staff_banner':False,'notifications':[],'unread_count':0}
     @app.errorhandler(403)
     def forbidden(e): return render_template('errors/403.html', forbidden_message=get_forbidden_context(), attempted_endpoint=request.endpoint), 403
     @app.errorhandler(404)
     def not_found(e): return render_template('errors/404.html'), 404
+    @app.post('/notifications/<int:notification_id>/read')
+    @login_required
+    @csrf.exempt
+    def notification_read(notification_id):
+        mark_read(notification_id, current_user.id)
+        return jsonify({'ok': True})
+    @app.post('/notifications/read-all')
+    @login_required
+    @csrf.exempt
+    def notifications_read_all():
+        mark_all_read(current_user.id)
+        return jsonify({'ok': True})
     return app
 
 app = create_app()

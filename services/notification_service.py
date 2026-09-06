@@ -11,6 +11,7 @@ def create_notification(user_id, title, message, ntype="info", link=None):
 
 
 def get_user_notifications(user_id, limit=20, unread_only=False):
+    limit = max(1, min(int(limit or 20), 100))
     sql = "SELECT * FROM notifications WHERE user_id = %s"
     params = [user_id]
     if unread_only:
@@ -48,6 +49,6 @@ def notify_patron(user_id, title, message, ntype="info", link=None):
 
 
 def notify_staff(title, message, ntype="info", link=None):
-    staff = query_all("SELECT id FROM users WHERE role IN ('staff', 'admin')")
+    staff = query_all("SELECT id FROM users WHERE role IN ('admin', 'security_head', 'safety_officer') AND account_status='active'")
     for row in staff:
         create_notification(row["id"], title, message, ntype, link)

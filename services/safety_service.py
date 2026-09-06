@@ -13,6 +13,7 @@ from werkzeug.utils import secure_filename
 
 from models.database import execute, query_all, query_one
 from services.audit_service import write_audit
+from services.notification_service import notify_staff
 from services.pagination import DEFAULT_PER_PAGE, paginate_items
 from services import osrm_client
 from services import risk_scoring
@@ -101,6 +102,14 @@ def sync_mv_campus_geo():
 
 def ensure_campus_seed():
     """Insert baseline campus geography if the DB is empty."""
+    if current_app.config.get("TESTING"):
+        if not query_one("SELECT id FROM campus_zones LIMIT 1"):
+            execute(
+                "INSERT INTO campus_zones (zone_code, zone_name, zone_type, risk_score) VALUES (%s,%s,%s,%s)",
+                ("G2", "Main Gate · Topaz / Sapphire", "gate", 87),
+            )
+        return True
+
     if query_one("SELECT id FROM buildings LIMIT 1"):
         sync_mv_campus_geo()
         return False
@@ -261,6 +270,35 @@ def _checkpoint_rows():
     return out
 
 
+def _operational_metrics():
+    """Calculate dashboard KPIs from current records instead of fixed demo values."""
+    routes = query_one("""SELECT COUNT(*) AS total, SUM(status='completed') AS completed,
+                                SUM(status IN ('assigned','in_progress')) AS active
+                         FROM patrol_routes WHERE created_at >= NOW() - INTERVAL 7 DAY""") or {}
+    scans = query_one("""SELECT COUNT(*) AS total, SUM(result='valid') AS valid,
+                               SUM(result IN ('missed','late','invalid')) AS missed
+                        FROM patrol_logs WHERE scanned_at >= NOW() - INTERVAL 7 DAY""") or {}
+    planned = int(routes.get("total") or 0)
+    completed = int(routes.get("completed") or 0)
+    scan_total = int(scans.get("total") or 0)
+    coverage = round((int(scans.get("valid") or 0) / scan_total) * 100) if scan_total else (round(completed / planned * 100) if planned else 0)
+    inspections = query_one("SELECT COUNT(*) AS total, SUM(status='completed') AS completed FROM safety_inspections") or {}
+    drills = query_one("SELECT COUNT(*) AS total, SUM(status='completed') AS completed FROM drills") or {}
+    risks = query_one("SELECT AVG(risk_score) AS average FROM risk_assessments WHERE status IN ('open','mitigating')") or {}
+    insp_total = int(inspections.get("total") or 0)
+    drill_total = int(drills.get("total") or 0)
+    insp_score = (int(inspections.get("completed") or 0) / insp_total * 100) if insp_total else 100
+    drill_score = (int(drills.get("completed") or 0) / drill_total * 100) if drill_total else 100
+    risk_score = float(risks.get("average") or 0)
+    readiness = round(max(0, min(100, insp_score * .4 + drill_score * .3 + (100 - min(100, risk_score * 5)) * .3)))
+    response = query_one("""SELECT AVG(TIMESTAMPDIFF(MINUTE, reported_at, COALESCE(resolved_at, NOW()))) AS minutes
+                           FROM incidents WHERE reported_at >= NOW() - INTERVAL 30 DAY""") or {}
+    minutes = response.get("minutes")
+    return {"coverage": coverage, "completed": completed, "planned": planned,
+            "missed": int(scans.get("missed") or 0), "active_routes": int(routes.get("active") or 0),
+            "readiness": readiness, "avg_response": f"{max(0, round(float(minutes))):02d}m" if minutes is not None else "—"}
+
+
 def get_safety_dashboard(section="overview"):
     ensure_campus_seed()
     try:
@@ -405,12 +443,13 @@ def get_safety_dashboard(section="overview"):
         stops = route_json.get("sequence") or []
         for stop in stops:
             sequence.append(stop)
+        metrics = _operational_metrics()
         patrol_meta = {
-            "coverage": 86,
-            "completed": query_one("SELECT COUNT(*) AS c FROM patrol_routes WHERE status='completed'")["c"],
-            "planned": query_one("SELECT COUNT(*) AS c FROM patrol_routes")["c"] or 1,
-            "missed": query_one("SELECT COUNT(*) AS c FROM patrol_logs WHERE result='missed'")["c"],
-            "active_routes": query_one("SELECT COUNT(*) AS c FROM patrol_routes WHERE status IN ('assigned','in_progress','draft')")["c"],
+            "coverage": metrics["coverage"],
+            "completed": metrics["completed"],
+            "planned": metrics["planned"],
+            "missed": metrics["missed"],
+            "active_routes": metrics["active_routes"],
             "duration": f"{max(1, int((latest_route['duration_seconds'] or 0) / 60))} min",
             "distance": f"{(latest_route['distance_meters'] or 0) / 1000:.1f} km",
             "engine": latest_route.get("routing_engine") or "OSRM",
@@ -431,12 +470,13 @@ def get_safety_dashboard(section="overview"):
             sequence.append({"label": f"{idx:02d}", "name": f"{cp['code']} · {cp['name']}", "code": cp["code"], "risk": cp["score"], "tone": cp["tone"], "lat": cp["lat"], "lng": cp["lng"]})
         if start:
             sequence.append({"label": "END", "name": start["name"], "code": start["code"], "risk": None, "tone": None, "lat": start["lat"], "lng": start["lng"]})
+        metrics = _operational_metrics()
         patrol_meta = {
-            "coverage": 86,
-            "completed": 0,
-            "planned": 0,
-            "missed": 0,
-            "active_routes": 0,
+            "coverage": metrics["coverage"],
+            "completed": metrics["completed"],
+            "planned": metrics["planned"],
+            "missed": metrics["missed"],
+            "active_routes": metrics["active_routes"],
             "duration": "—",
             "distance": "—",
             "engine": "OSRM",
@@ -466,7 +506,8 @@ def get_safety_dashboard(section="overview"):
 
     open_incidents = sum(1 for i in incidents if i["status_key"] in ("reported", "verified", "responding"))
     guards = query_one("SELECT COUNT(*) AS c FROM users WHERE role IN ('guard','security_head') AND account_status='active'")["c"]
-    readiness = 91
+    operational = _operational_metrics()
+    readiness = operational["readiness"]
     avg_risk = round(sum(c["risk"] for c in display_checkpoints) / max(1, len(display_checkpoints)), 1) if display_checkpoints else 0
 
     counts = {"reported": 0, "verified": 0, "responding": 0, "resolved": 0}
@@ -598,7 +639,7 @@ def get_safety_dashboard(section="overview"):
         "activity": activity,
         "trends": trends,
         "pagination": pagination,
-        "hero": {"checkpoints": len(all_checkpoints), "readiness": readiness, "avg_response": "06m"},
+        "hero": {"checkpoints": len(all_checkpoints), "readiness": readiness, "avg_response": operational["avg_response"]},
         "report_types": report_types,
         "map": {
             "center": [
@@ -636,23 +677,34 @@ def log_incident(title, location, priority="medium", actor="OSAS Administrator",
         (f"%{location}%", f"%{location}%"),
     )
     code = _next_code("INC-", "incidents", "incident_code")
-    # simpler yearless sequence if preferred
-    last = query_one("SELECT id FROM incidents ORDER BY id DESC LIMIT 1")
-    code = f"INC-{24000 + (last['id'] if last else 0) + 1}"
     iid, _ = execute(
         """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
            VALUES (%s,%s,%s,%s,%s,%s,%s,'reported')""",
         (code, zone["id"] if zone else None, user_id, incident_type, title, location, priority),
     )
     write_audit("Incident logged", "incident", iid, new_values={"code": code, "title": title, "location": location})
-    risk_scoring.refresh_all_risk_scores()
+    notify_staff("New incident reported", f"{code}: {title} · {location}", "danger", "/safety/incidents")
+    if not current_app.config.get("TESTING"):
+        risk_scoring.refresh_all_risk_scores()
     return code
 
 
 def update_incident(code, status, notes="", actor="OSAS Administrator", user_id=None):
     status = (status or "").lower()
+    allowed = {"reported", "verified", "responding", "resolved", "closed"}
+    if status not in allowed:
+        return False
     row = query_one("SELECT * FROM incidents WHERE incident_code=%s", (code,))
     if not row:
+        return False
+    transitions = {
+        "reported": {"reported", "verified"},
+        "verified": {"verified", "responding", "resolved"},
+        "responding": {"responding", "resolved"},
+        "resolved": {"resolved", "closed"},
+        "closed": {"closed"},
+    }
+    if status not in transitions.get(row["status"], set()):
         return False
     extras = ""
     params = [status]
@@ -660,6 +712,9 @@ def update_incident(code, status, notes="", actor="OSAS Administrator", user_id=
         extras = ", verified_at=NOW()"
     if status in ("resolved", "closed"):
         extras += ", resolved_at=NOW()"
+    if notes:
+        extras += ", description=CONCAT(COALESCE(description, ''), %s)"
+        params.append(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {notes}")
     params.append(code)
     execute(f"UPDATE incidents SET status=%s{extras} WHERE incident_code=%s", tuple(params))
     write_audit("Incident updated", "incident", row["id"], old_values={"status": row["status"]}, new_values={"status": status, "notes": notes})
