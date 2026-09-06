@@ -5140,10 +5140,43 @@ body.dark-mode .profile-header-btn {
     cursor: pointer;
     line-height: 1;
 }
-.login-password-toggle:focus-visible {
-    outline: 2px solid #3b82f6;
-    outline-offset: 2px;
-    border-radius: 9999px;
+/* Keep login page light regardless of saved app theme */
+body.login-bg,
+body.login-bg.dark-mode {
+    --bcp-surface: #f8fafc;
+    --bcp-card: #ffffff;
+    --bcp-text: #0f172a;
+    --bcp-muted: #64748b;
+    --bcp-border: #e2e8f0;
+    --bcp-navy: #1e3a5f;
+    color: #0f172a;
+    background: inherit;
+}
+
+body.login-bg .login-input,
+body.login-bg.dark-mode .login-input {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
+    caret-color: #0f172a;
+}
+
+body.login-bg .login-input::placeholder,
+body.login-bg.dark-mode .login-input::placeholder {
+    color: #94a3b8 !important;
+}
+
+body.login-bg .login-input-icon,
+body.login-bg.dark-mode .login-input-icon,
+body.login-bg .login-password-toggle,
+body.login-bg.dark-mode .login-password-toggle {
+    color: #94a3b8 !important;
+}
+
+body.login-bg .login-card,
+body.login-bg.dark-mode .login-card {
+    background: #ffffff !important;
+    color: #0f172a !important;
 }
 
 /* ── Dark mode: safety modules, modals, users ─────────────────────────── */
@@ -5399,9 +5432,9 @@ body.dark-mode .modal-close:hover {
 body.dark-mode .modal-dialog input,
 body.dark-mode .modal-dialog select,
 body.dark-mode .modal-dialog textarea,
-body.dark-mode .login-input,
-body.dark-mode select.login-input,
-body.dark-mode textarea.login-input {
+body.dark-mode .app-shell .login-input,
+body.dark-mode .app-shell select.login-input,
+body.dark-mode .app-shell textarea.login-input {
     background: #1e3050;
     border-color: var(--bcp-border);
     color: var(--bcp-text);
@@ -5410,7 +5443,7 @@ body.dark-mode textarea.login-input {
 body.dark-mode .modal-dialog input:focus,
 body.dark-mode .modal-dialog select:focus,
 body.dark-mode .modal-dialog textarea:focus,
-body.dark-mode .login-input:focus {
+body.dark-mode .app-shell .login-input:focus {
     border-color: #6366f1;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.22);
     outline: none;

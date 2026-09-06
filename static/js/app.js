@@ -717,6 +717,9 @@ function initRelativeTimestamps() {
 }
 
 function initDarkMode() {
+    // Login stays light-only — never inherit the app theme preference.
+    if (document.body.classList.contains('login-bg')) return;
+
     const toggle = document.getElementById('theme-toggle');
     const icon = document.getElementById('theme-icon');
     const saved = localStorage.getItem('lms-theme');
