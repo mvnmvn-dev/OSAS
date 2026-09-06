@@ -4971,3 +4971,24 @@ body.dark-mode .profile-header-btn {
     .form-row, .user-password-row { grid-template-columns: 1fr; }
     .modal-dialog { max-height: 95vh; }
 }
+
+/* Keep login field icons visible above the input while users type. */
+.login-field { position: relative; }
+.login-input { position: relative; z-index: 1; padding-left: 2.85rem; }
+.login-input-icon {
+    z-index: 3;
+    pointer-events: none;
+    user-select: none;
+}
+.login-password-toggle {
+    z-index: 3;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    line-height: 1;
+}
+.login-password-toggle:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+    border-radius: 9999px;
+}
