@@ -432,13 +432,14 @@ body {
 }
 
 .header-clock {
-    font-size: 0.9375rem;
+    font-size: 0.8125rem;
     font-weight: 500;
     color: var(--bcp-muted);
     font-variant-numeric: tabular-nums;
     padding: 0.35rem 0.75rem;
     background: var(--bcp-surface);
     border-radius: 0.5rem;
+    white-space: nowrap;
 }
 
 /* Breadcrumbs & titles */

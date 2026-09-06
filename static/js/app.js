@@ -84,9 +84,13 @@ function updateClock() {
     const el = document.getElementById('clock');
     if (el) {
         const now = new Date();
-        el.textContent = now.toLocaleTimeString('en-US', {
+        const date = now.toLocaleDateString('en-US', {
+            weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
+        });
+        const time = now.toLocaleTimeString('en-US', {
             hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true
         }).toUpperCase();
+        el.textContent = `${date} · ${time}`;
     }
 }
 setInterval(updateClock, 1000);
