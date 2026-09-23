@@ -17,6 +17,7 @@ from services.notification_service import notify_staff
 from services.pagination import DEFAULT_PER_PAGE, paginate_items
 from services import osrm_client
 from services import risk_scoring
+from services import visitor_service
 
 STATUS_UI = {
     "reported": ("Reported", "danger"),
@@ -49,55 +50,100 @@ def _now_label():
 MV_CENTER_LAT = 14.72632
 MV_CENTER_LNG = 121.03601
 
-# Relative offsets (degrees) for on-campus buildings / checkpoints around Topaz–Sapphire
+# Official BCP MV Campus geography from the OSAS GIS Pack v1.0.
 CAMPUS_BUILDINGS = [
     ("MAIN", "Main Academic Building", 4, 14.72638, 121.03605),
-    ("SCI", "Science / Laboratory Building", 3, 14.72655, 121.03628),
+    ("SCI", "Science / Laboratory Building", 3, 14.72655, 121.03692),
     ("SC", "Student Center", 2, 14.72618, 121.03635),
-    ("SEC", "Security Office", 1, 14.72620, 121.03578),
+    ("ADMIN", "Administration Building", 3, 14.72678, 121.03602),
+    ("SEC", "OSAS Command Center", 1, 14.72630, 121.03644),
 ]
 
 CAMPUS_ZONES = [
-    ("G2", "Main Gate · Topaz / Sapphire", "MAIN", "gate", 87),
-    ("QN", "Open Court / Quadrangle", None, "open_space", 72),
-    ("S1", "Science Building Zone", "SCI", "building", 72),
-    ("SCL", "Student Center Lobby", "SC", "building", 59),
-    ("SECZ", "Security Office Zone", "SEC", "building", 35),
+    ("ZA", "Zone A · Main Gate & Visitor Entrance", "MAIN", "gate", 90),
+    ("ZB", "Zone B · Academic Buildings & Classrooms", "MAIN", "building", 75),
+    ("ZC", "Zone C · Science & Computer Laboratories", "SCI", "building", 82),
+    ("ZD", "Zone D · Student Center & Open Court", "SC", "open_space", 84),
+    ("ZE", "Zone E · Administration & Library", "ADMIN", "building", 55),
+    ("ZF", "Zone F · Parking & Perimeter Fence", None, "parking", 90),
+    ("SECZ", "OSAS Command Center Zone", "SEC", "building", 25),
     ("AZA", "Assembly Zone A · Topaz side", "MAIN", "assembly_area", 20),
     ("AZB", "Assembly Zone B · Sapphire side", "SCI", "assembly_area", 20),
 ]
 
 CAMPUS_CHECKPOINTS = [
-    ("SEC", "Security Office", "SECZ", 14.72620, 121.03578),
-    ("G2", "Main Gate · Topaz / Sapphire", "G2", 14.72605, 121.03588),
-    ("QN", "Open Court / Quadrangle", "QN", 14.72645, 121.03615),
-    ("S1", "Science Building", "S1", 14.72655, 121.03628),
-    ("SC", "Student Center", "SCL", 14.72618, 121.03635),
+    ("G1", "Main Gate · Topaz / Sapphire", "ZA", 14.726050, 121.035880, 10),
+    ("G2", "Topaz Street Entrance", "ZA", 14.726420, 121.035620, 8),
+    ("G3", "Sapphire Street Entrance", "ZA", 14.725740, 121.036190, 8),
+    ("AC1", "Academic Building Lobby", "ZB", 14.726380, 121.036050, 5),
+    ("AC2", "Classroom Hallway · Ground Floor", "ZB", 14.726300, 121.036120, 5),
+    ("AC3", "Classroom Hallway · Upper Floor", "ZB", 14.726460, 121.036080, 5),
+    ("AC4", "Faculty Corridor", "ZB", 14.726420, 121.036020, 5),
+    ("LAB1", "Science Laboratory Wing", "ZC", 14.726550, 121.036920, 7),
+    ("LAB2", "Computer Laboratory Corridor", "ZC", 14.726120, 121.036820, 6),
+    ("LAB3", "Laboratory Equipment Storage", "ZC", 14.726470, 121.036850, 7),
+    ("ST1", "Open Court / Quadrangle", "ZD", 14.726450, 121.036130, 10),
+    ("ST2", "Student Center Lobby", "ZD", 14.726170, 121.036350, 9),
+    ("ST3", "Cafeteria Entrance", "ZD", 14.726050, 121.036500, 9),
+    ("ST4", "Covered Walkway", "ZD", 14.726300, 121.036300, 6),
+    ("AD1", "Administration Building Lobby", "ZE", 14.726780, 121.036020, 4),
+    ("AD2", "Registrar Office Corridor", "ZE", 14.726720, 121.036180, 4),
+    ("AD3", "Library Entrance", "ZE", 14.726670, 121.036480, 5),
+    ("AD4", "OSAS Command Center", "SECZ", 14.726300, 121.036440, 2),
+    ("PR1", "Parking Area", "ZF", 14.725920, 121.035710, 9),
+    ("PR2", "Back Gate / Service Gate", "ZF", 14.725590, 121.036930, 10),
+    ("PR3", "Perimeter Fence · East Side", "ZF", 14.725760, 121.037120, 10),
+    ("PR4", "Emergency Exit Gate", "ZF", 14.726020, 121.036980, 8),
 ]
+
+OFFICIAL_ZONE_FREQUENCY = {
+    "ZA": "Every 30 minutes",
+    "ZB": "Every 45 minutes",
+    "ZC": "Every 60 minutes",
+    "ZD": "Every 30 minutes during breaks",
+    "ZE": "Every 60 minutes",
+    "ZF": "Every 45 minutes and during dismissal",
+}
+
+OFFICIAL_PATROL_ROUTES = {
+    "Alpha": ["G1", "G2", "AD1", "AD3", "AD4"],
+    "Bravo": ["ST1", "ST2", "ST3", "LAB2", "LAB1", "AD3"],
+    "Charlie": ["PR1", "G3", "G1", "ST1", "PR2"],
+    "Delta": ["PR2", "PR3", "PR4", "G2", "G1"],
+}
+
+OFFICIAL_CHECKPOINT_RISK = {
+    "G1": ("Critical", 10), "G2": ("High", 8), "G3": ("High", 8),
+    "AC1": ("Medium", 5), "AC2": ("Medium", 5), "AC3": ("Medium", 5), "AC4": ("Medium", 5),
+    "LAB1": ("High", 7), "LAB2": ("Medium", 6), "LAB3": ("High", 7),
+    "ST1": ("High", 10), "ST2": ("High", 9), "ST3": ("High", 9), "ST4": ("Medium", 6),
+    "AD1": ("Medium", 4), "AD2": ("Medium", 4), "AD3": ("Medium", 5), "AD4": ("Low", 2),
+    "PR1": ("High", 9), "PR2": ("Critical", 10), "PR3": ("Critical", 10), "PR4": ("High", 8),
+}
 
 
 def sync_mv_campus_geo():
-    """Keep seeded building/checkpoint coordinates aligned to the MV Campus map."""
+    """Upsert the official GIS pack and retire former placeholder labels."""
+    bmap = {r["building_code"]: r["id"] for r in query_all("SELECT id, building_code FROM buildings")}
     for code, name, floors, lat, lng in CAMPUS_BUILDINGS:
-        execute(
-            """UPDATE buildings
-               SET building_name=%s, floors=%s, latitude=%s, longitude=%s
-               WHERE building_code=%s""",
-            (name, floors, lat, lng, code),
-        )
-    for code, name, _building, ztype, risk in CAMPUS_ZONES:
-        execute(
-            """UPDATE campus_zones SET zone_name=%s, zone_type=%s
-               WHERE zone_code=%s""",
-            (name, ztype, code),
-        )
-    for code, name, _zcode, lat, lng in CAMPUS_CHECKPOINTS:
-        execute(
-            """UPDATE checkpoints
-               SET checkpoint_name=%s, latitude=%s, longitude=%s
-               WHERE checkpoint_code=%s""",
-            (name, lat, lng, code),
-        )
+        execute("""UPDATE buildings SET building_name=%s, floors=%s, latitude=%s, longitude=%s WHERE building_code=%s""", (name, floors, lat, lng, code))
+    for code, name, building_code, ztype, risk in CAMPUS_ZONES:
+        if not query_one("SELECT id FROM campus_zones WHERE zone_code=%s", (code,)):
+            execute("INSERT INTO campus_zones (zone_code, zone_name, building_id, zone_type, risk_score) VALUES (%s,%s,%s,%s,%s)", (code, name, bmap.get(building_code) if building_code else None, ztype, risk))
+        execute("UPDATE campus_zones SET zone_name=%s, zone_type=%s, active=1 WHERE zone_code=%s", (name, ztype, code))
+    zmap = {r["zone_code"]: r["id"] for r in query_all("SELECT id, zone_code FROM campus_zones")}
+    legacy_checkpoint_map = {"G2": "G1", "QN": "ST1", "S1": "LAB1", "SC": "ST2", "SEC": "AD4"}
+    for legacy_code, official_code in legacy_checkpoint_map.items():
+        legacy = query_one("SELECT id FROM checkpoints WHERE checkpoint_code=%s", (legacy_code,))
+        target = query_one("SELECT id FROM checkpoints WHERE checkpoint_code=%s", (official_code,))
+        if legacy and not target and legacy_code != official_code:
+            execute("UPDATE checkpoints SET checkpoint_code=%s WHERE id=%s", (official_code, legacy["id"]))
+    for code, name, zcode, lat, lng, _risk in CAMPUS_CHECKPOINTS:
+        if not query_one("SELECT id FROM checkpoints WHERE checkpoint_code=%s", (code,)):
+            execute("INSERT INTO checkpoints (checkpoint_code, checkpoint_name, zone_id, scan_token, latitude, longitude) VALUES (%s,%s,%s,%s,%s,%s)", (code, name, zmap[zcode], f"tok-{code.lower()}-{secrets.token_hex(4)}", lat, lng))
+        execute("UPDATE checkpoints SET checkpoint_name=%s, zone_id=%s, latitude=%s, longitude=%s, active=1 WHERE checkpoint_code=%s", (name, zmap[zcode], lat, lng, code))
+    for legacy_zone in ("G2", "QN", "S1", "SCL"):
+        execute("UPDATE campus_zones SET active=0 WHERE zone_code=%s", (legacy_zone,))
 
 
 def ensure_campus_seed():
@@ -106,7 +152,7 @@ def ensure_campus_seed():
         if not query_one("SELECT id FROM campus_zones LIMIT 1"):
             execute(
                 "INSERT INTO campus_zones (zone_code, zone_name, zone_type, risk_score) VALUES (%s,%s,%s,%s)",
-                ("G2", "Main Gate · Topaz / Sapphire", "gate", 87),
+                ("ZA", "Zone A · Main Gate & Visitor Entrance", "gate", 90),
             )
         return True
 
@@ -130,7 +176,7 @@ def ensure_campus_seed():
         )
 
     zmap = {r["zone_code"]: r["id"] for r in query_all("SELECT id, zone_code FROM campus_zones")}
-    for code, name, zcode, lat, lng in CAMPUS_CHECKPOINTS:
+    for code, name, zcode, lat, lng, _risk in CAMPUS_CHECKPOINTS:
         token = f"tok-{code.lower()}-{secrets.token_hex(4)}"
         execute(
             """INSERT INTO checkpoints (checkpoint_code, checkpoint_name, zone_id, scan_token, latitude, longitude)
@@ -146,28 +192,28 @@ def ensure_campus_seed():
     execute(
         """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
            VALUES (%s,%s,%s,'security',%s,%s,'high','responding')""",
-        ("INC-24091", zmap["G2"], lead_id, "Unauthorized access attempt", "Attempted entry without ID at Main Gate · Topaz / Sapphire"),
+        ("INC-24091", zmap["ZA"], lead_id, "Unauthorized access attempt", "Attempted entry without ID at Main Gate · Topaz / Sapphire"),
     )
     execute(
         """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
            VALUES (%s,%s,%s,'safety_hazard',%s,%s,'medium','verified')""",
-        ("INC-24090", zmap["S1"], lead_id, "Wet floor reported", "Spill on Science Building 2F corridor"),
+        ("INC-24090", zmap["ZC"], lead_id, "Wet floor reported", "Spill on Science Laboratory Wing corridor"),
     )
     execute(
         """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
            VALUES (%s,%s,%s,'medical',%s,%s,'high','resolved')""",
-        ("INC-24089", zmap["SCL"], lead_id, "Medical assistance requested", "Student required first aid in Student Center lobby"),
+        ("INC-24089", zmap["ZD"], lead_id, "Medical assistance requested", "Student required first aid in Student Center lobby"),
     )
 
     execute(
         """INSERT INTO safety_inspections (inspection_code, zone_id, inspector_id, scheduled_date, status, notes)
            VALUES (%s,%s,%s,CURDATE() + INTERVAL 2 DAY,'scheduled',%s)""",
-        ("INS-2026-031", zmap["S1"], lead_id, "Fire safety equipment"),
+        ("INS-2026-031", zmap["ZC"], lead_id, "Fire safety equipment"),
     )
     execute(
         """INSERT INTO safety_inspections (inspection_code, zone_id, inspector_id, scheduled_date, status, notes)
            VALUES (%s,%s,%s,CURDATE() - INTERVAL 1 DAY,'overdue',%s)""",
-        ("INS-2026-030", zmap["G2"], lead_id, "Access control and lighting — corrective action open"),
+        ("INS-2026-030", zmap["ZA"], lead_id, "Access control and lighting — corrective action open"),
     )
 
     execute(
@@ -199,7 +245,7 @@ def ensure_campus_seed():
     execute(
         """INSERT INTO risk_assessments (zone_id, assessed_by, hazard_title, likelihood, severity, risk_score, status)
            VALUES (%s,%s,'Earthquake structural review',3,4,12,'open')""",
-        (zmap["S1"], lead_id),
+        (zmap["ZC"], lead_id),
     )
 
     risk_scoring.refresh_all_risk_scores()
@@ -250,6 +296,7 @@ def _checkpoint_rows():
     out = []
     for r in rows:
         w = weights.get(r["id"], {})
+        official_risk, official_score = OFFICIAL_CHECKPOINT_RISK.get(r["checkpoint_code"], ("Medium", 5))
         score = w.get("score") or float(r.get("risk") or 0) or 50
         tone = w.get("tone") or ("danger" if score >= 80 else "warning" if score >= 65 else "success")
         last = r.get("last_scan")
@@ -260,11 +307,14 @@ def _checkpoint_rows():
             "method": "QR",
             "last_scan": last.strftime("%I:%M %p").lstrip("0") if last else "—",
             "risk": score,
+            "official_risk": official_risk,
+            "official_score": official_score,
+            "patrol_frequency": OFFICIAL_ZONE_FREQUENCY.get(r.get("zone_code"), "Every 60 minutes"),
             "tone": tone,
             "lat": float(r["latitude"]) if r["latitude"] is not None else None,
             "lng": float(r["longitude"]) if r["longitude"] is not None else None,
             "scan_token": r["scan_token"],
-            "map_class": {"G2": "gate", "S1": "science", "QN": "quad", "SC": "center"}.get(r["checkpoint_code"]),
+            "map_class": {"G1": "gate", "G2": "gate", "G3": "gate", "LAB1": "science", "ST1": "quad", "ST2": "center", "AD4": "command", "PR2": "perimeter"}.get(r["checkpoint_code"]),
             "zone_name": r.get("zone_name"),
         })
     return out
@@ -508,7 +558,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
     all_incidents = incidents
     checkpoints = _checkpoint_rows()
     all_checkpoints = checkpoints
-    display_checkpoints = [c for c in checkpoints if c["code"] != "SEC"]
+    display_checkpoints = [c for c in checkpoints if c["code"] != "AD4"]
 
     teams_raw = query_all(
         """
@@ -660,7 +710,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
     else:
         # Build preview sequence from risk weights
         weights = risk_scoring.checkpoint_priority_weights()
-        start = next((c for c in weights if c["code"] == "SEC"), weights[0] if weights else None)
+        start = next((c for c in weights if c["code"] == "AD4"), weights[0] if weights else None)
         ranked = [c for c in weights if not start or c["checkpoint_id"] != start["checkpoint_id"]][:4]
         sequence = []
         if start:
@@ -809,6 +859,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         {"key": "inspections", "label": "Inspection Compliance", "hint": f"{len(inspections)} inspections"},
         {"key": "audit", "label": "Audit Log", "hint": f"{len(activity)} actions"},
     ]
+    visitors = visitor_service.list_visitors() if section == "visitors" else []
 
     pagination = {}
     teams_options = list(teams)
@@ -833,6 +884,8 @@ def get_safety_dashboard(section="overview", status_filter=None):
     if section == "reports":
         trends, pagination["trends"] = paginate_items(trends, per_page=DEFAULT_PER_PAGE)
         report_types, pagination["reports"] = paginate_items(report_types, per_page=DEFAULT_PER_PAGE)
+    if section == "visitors":
+        visitors, pagination["visitors"] = paginate_items(visitors, per_page=DEFAULT_PER_PAGE)
 
     map_points = [
         {"code": c["code"], "name": c["name"], "lat": c["lat"], "lng": c["lng"], "risk": c["risk"], "tone": c["tone"]}
@@ -891,6 +944,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         "pagination": pagination,
         "hero": {"checkpoints": len(all_checkpoints), "readiness": readiness, "avg_response": operational["avg_response"]},
         "report_types": report_types,
+        "visitors": visitors,
         "analytics": analytics,
         "map": {
             "center": [
@@ -1021,7 +1075,7 @@ def generate_route(patrol_date, team_name, start_code, duration, actor="OSAS Adm
     ensure_campus_seed()
     weights = risk_scoring.checkpoint_priority_weights()
     by_code = {w["code"]: w for w in weights}
-    start = by_code.get(start_code) or next((w for w in weights if w["code"] == "SEC"), weights[0])
+    start = by_code.get(start_code) or next((w for w in weights if w["code"] == "AD4"), weights[0])
     others = [w for w in weights if w["checkpoint_id"] != start["checkpoint_id"] and w.get("lat") is not None]
     # Risk-prioritized visit set (top 4) then OSRM trip from start
     prioritized = sorted(others, key=lambda w: w["score"], reverse=True)[:4]

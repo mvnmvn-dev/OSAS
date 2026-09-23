@@ -70,4 +70,21 @@ CREATE TABLE IF NOT EXISTS notifications (
     is_read INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS visitors (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pass_code TEXT NOT NULL UNIQUE,
+    full_name TEXT NOT NULL,
+    phone TEXT,
+    email TEXT,
+    purpose TEXT NOT NULL,
+    host_name TEXT NOT NULL,
+    visit_date TEXT NOT NULL,
+    valid_until TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'registered',
+    entry_at TEXT,
+    exit_at TEXT,
+    registered_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (registered_by) REFERENCES users(id) ON DELETE SET NULL
+);
 """

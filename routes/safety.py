@@ -2,6 +2,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 from flask_login import current_user, login_required
 from services.rbac import require_permission
 from services import safety_service as safety_svc
+from services import visitor_service
 import os
 
 safety_bp = Blueprint('safety', __name__, url_prefix='/safety')
@@ -42,6 +43,10 @@ SECTION_META = {
     'activity': {
         'title': 'Activity Log',
         'subtitle': 'Audit recent system actions across incidents, patrols, and inspections.',
+    },
+    'visitors': {
+        'title': 'Visitors and Gate Security',
+        'subtitle': 'Issue time-bound QR visitor passes and verify entry and exit at campus gates.',
     },
 }
 
@@ -133,6 +138,40 @@ def reports():
 @require_permission('reports.view')
 def activity():
     return page('activity')
+
+
+@safety_bp.route('/visitors')
+@login_required
+@require_permission('visitor.view')
+def visitors():
+    return page('visitors')
+
+
+@safety_bp.route('/visitors', methods=['POST'])
+@login_required
+@require_permission('visitor.manage')
+def register_visitor():
+    required = ['full_name', 'purpose', 'host_name', 'visit_date']
+    if any(not (request.form.get(field) or '').strip() for field in required):
+        flash('Visitor name, purpose, host, and visit date are required.', 'error')
+    else:
+        visitor = visitor_service.register_visitor(
+            request.form['full_name'], request.form['purpose'], request.form['host_name'],
+            request.form['visit_date'], _uid(), request.form.get('phone'), request.form.get('email')
+        )
+        flash(f"Visitor pass {visitor['pass_code']} issued.", 'success')
+    return redirect(url_for('safety.visitors'))
+
+
+@safety_bp.route('/visitors/validate', methods=['POST'])
+@login_required
+@require_permission('visitor.manage')
+def validate_visitor():
+    code = (request.form.get('pass_code') or '').strip()
+    action = request.form.get('action') or 'entry'
+    visitor, message = visitor_service.validate_pass(code, _uid(), action)
+    flash(message if message != 'OK' else f"Visitor {action} verified: {visitor['full_name']}.", 'success' if message == 'OK' else 'error')
+    return redirect(url_for('safety.visitors'))
 
 
 @safety_bp.route('/incidents', methods=['POST'])

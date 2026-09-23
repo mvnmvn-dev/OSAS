@@ -226,3 +226,15 @@ CREATE TABLE IF NOT EXISTS analytics_log (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS visitors (
+  id INT AUTO_INCREMENT PRIMARY KEY, pass_code VARCHAR(80) NOT NULL UNIQUE,
+  full_name VARCHAR(150) NOT NULL, phone VARCHAR(40), email VARCHAR(120),
+  purpose VARCHAR(180) NOT NULL, host_name VARCHAR(150) NOT NULL,
+  visit_date DATE NOT NULL, valid_until DATETIME NOT NULL,
+  status ENUM('registered','checked_in','exited','expired','revoked') NOT NULL DEFAULT 'registered',
+  entry_at DATETIME NULL, exit_at DATETIME NULL, registered_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (registered_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_visitors_visit_date (visit_date), INDEX idx_visitors_status (status)
+);

@@ -3,11 +3,11 @@ from flask import abort, jsonify, request
 from flask_login import current_user
 
 ROLE_PERMISSIONS = {
-    'admin': {'dashboard.view','safety.view','safety.manage','patrol.view','patrol.manage','reports.view','reports.manage','users.manage','audit.view','profile.manage_own'},
-    'security_head': {'dashboard.view','safety.view','safety.manage','patrol.view','patrol.manage','reports.view','profile.manage_own'},
-    'guard': {'dashboard.view','safety.view','patrol.view','patrol.manage','profile.manage_own'},
-    'safety_officer': {'dashboard.view','safety.view','safety.manage','reports.view','reports.manage','profile.manage_own'},
-    'faculty_staff': {'dashboard.view','safety.view','profile.manage_own'},
+    'admin': {'dashboard.view','safety.view','safety.manage','patrol.view','patrol.manage','visitor.view','visitor.manage','reports.view','reports.manage','users.manage','audit.view','profile.manage_own'},
+    'security_head': {'dashboard.view','safety.view','safety.manage','patrol.view','patrol.manage','visitor.view','visitor.manage','reports.view','profile.manage_own'},
+    'guard': {'dashboard.view','safety.view','patrol.view','patrol.manage','visitor.view','visitor.manage','profile.manage_own'},
+    'safety_officer': {'dashboard.view','safety.view','safety.manage','visitor.view','reports.view','reports.manage','profile.manage_own'},
+    'faculty_staff': {'dashboard.view','safety.view','visitor.view','profile.manage_own'},
 }
 ROLE_LABELS = {'admin':'Administrator','security_head':'Security Head','guard':'Security Guard','safety_officer':'Safety Officer','faculty_staff':'Faculty / Staff'}
 PUBLIC_ENDPOINTS = frozenset({'auth.login','auth.logout','auth.index','auth.change_password','static','api.health'})
@@ -16,11 +16,12 @@ ENDPOINT_PERMISSIONS = {
     'safety.patrol':'patrol.view', 'safety.teams':'patrol.view', 'safety.incidents':'safety.view', 'safety.inspections':'safety.view', 'safety.emergency':'safety.view', 'safety.reports':'reports.view', 'safety.activity':'reports.view',
     'safety.create_inspection':'safety.manage', 'safety.create_drill':'safety.manage', 'safety.create_plan':'safety.manage',
     'safety.generate_route':'patrol.manage', 'safety.save_team':'patrol.manage', 'safety.save_checkpoint':'patrol.manage',
-    'safety.export_report':'reports.manage', 'safety.update_incident':'safety.manage',
+    'safety.export_report':'reports.manage', 'safety.update_incident':'safety.manage', 'safety.visitors':'visitor.view', 'safety.register_visitor':'visitor.manage', 'safety.validate_visitor':'visitor.manage',
     'safety.attach_incident_file':'safety.manage', 'safety.notify_parent':'safety.manage', 'safety.scan_checkpoint':'patrol.manage',
     'notification_read':'profile.manage_own', 'notifications_read_all':'profile.manage_own',
     'profile.index':'profile.manage_own', 'profile.update':'profile.manage_own', 'profile.upload_photo':'profile.manage_own', 'profile.remove_photo':'profile.manage_own',
     'users.index':'users.manage', 'users.create':'users.manage', 'users.update':'users.manage', 'users.reset_password':'users.manage',
+    'api.campus_map':'safety.view', 'api.readiness':'safety.view', 'api.patrol_scan':'patrol.manage', 'api.visitors':'visitor.view',
 }
 NAV_SECTIONS = [
     {'label':'Main','items':[{'label':'Command Dashboard','endpoint':'safety.index','icon':'fa-gauge-high','permission':'dashboard.view'}]},
@@ -28,6 +29,7 @@ NAV_SECTIONS = [
         {'label':'Incident Response','endpoint':'safety.incidents','icon':'fa-triangle-exclamation','permission':'safety.view'},
         {'label':'Inspections & Risks','endpoint':'safety.inspections','icon':'fa-clipboard-check','permission':'safety.view'},
         {'label':'Emergency Plans & Drills','endpoint':'safety.emergency','icon':'fa-person-running','permission':'safety.view'},
+        {'label':'Visitors & Gate Security','endpoint':'safety.visitors','icon':'fa-id-card','permission':'visitor.view'},
     ]},
     {'label':'Security Patrol','items':[
         {'label':'Predictive Patrol Planning','endpoint':'safety.patrol','icon':'fa-route','permission':'patrol.view'},
