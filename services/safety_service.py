@@ -285,7 +285,7 @@ def _checkpoint_rows():
     weights = {w["checkpoint_id"]: w for w in risk_scoring.checkpoint_priority_weights()}
     rows = query_all(
         """
-        SELECT c.*, z.zone_name,
+        SELECT c.*, z.zone_name, z.zone_code,
                (SELECT MAX(pl.scanned_at) FROM patrol_logs pl WHERE pl.checkpoint_id = c.id) AS last_scan
         FROM checkpoints c
         JOIN campus_zones z ON z.id = c.zone_id
@@ -888,7 +888,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         visitors, pagination["visitors"] = paginate_items(visitors, per_page=DEFAULT_PER_PAGE)
 
     map_points = [
-        {"code": c["code"], "name": c["name"], "lat": c["lat"], "lng": c["lng"], "risk": c["risk"], "tone": c["tone"]}
+        {"code": c["code"], "name": c["name"], "lat": c["lat"], "lng": c["lng"], "risk": c["risk"], "tone": c["tone"], "official_risk": c.get("official_risk"), "frequency": c.get("patrol_frequency")}
         for c in all_checkpoints if c["lat"] is not None and c["lng"] is not None
     ]
 
@@ -959,6 +959,8 @@ def get_safety_dashboard(section="overview", status_filter=None):
             ),
             "points": map_points,
             "geometry": patrol_meta.get("geometry"),
+            "official_routes": OFFICIAL_PATROL_ROUTES,
+            "zone_frequency": OFFICIAL_ZONE_FREQUENCY,
         },
     }
 

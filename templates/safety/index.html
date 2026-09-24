@@ -215,7 +215,7 @@
                         <span class="cp-code risk-{{ cp.tone }}">{{ cp.code }}</span>
                         <span class="cp-meta">
                             <strong>{{ cp.name }}</strong>
-                            <small>Risk {{ cp.risk }} · {{ cp.lat|round(5) }}, {{ cp.lng|round(5) }}</small>
+                            <small>{{ cp.official_risk }} risk · {{ cp.patrol_frequency }} · {{ cp.lat|round(5) }}, {{ cp.lng|round(5) }}</small>
                         </span>
                     </button>
                 {% else %}
@@ -497,7 +497,7 @@
                 <div class="entity-card-top">
                     <div class="entity-main">
                         <strong>{{ cp.code }} · {{ cp.name }}</strong>
-                        <span>{{ cp.method }} active · Last scan {{ cp.last_scan }}</span>
+                    <span>{{ cp.method }} active · {{ cp.official_risk }} risk · {{ cp.patrol_frequency }} · Last scan {{ cp.last_scan }}</span>
                     </div>
                     <span class="risk-pill risk-{{ cp.tone }}">Risk {{ cp.risk }}</span>
                 </div>
