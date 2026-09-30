@@ -9,15 +9,15 @@ safety_bp = Blueprint('safety', __name__, url_prefix='/safety')
 
 SECTION_META = {
     'overview': {
-        'title': 'Command Dashboard',
-        'subtitle': 'Campus readiness, incidents, patrol coverage, and compliance at a glance.',
+        'title': 'Campus Security Dashboard',
+        'subtitle': 'Real-time operational visibility across incidents, patrols, checkpoints, and readiness.',
     },
     'incidents': {
-        'title': 'Incident Response',
-        'subtitle': 'Record, verify, assign, and close campus incidents with a clear response trail.',
+        'title': 'Incidents',
+        'subtitle': 'Prioritize severity, location, status, and assigned response for every campus incident.',
     },
     'inspections': {
-        'title': 'Inspections and Risks',
+        'title': 'Inspections',
         'subtitle': 'Track safety inspections, findings, and corrective actions by campus zone.',
     },
     'osas': {
@@ -25,19 +25,19 @@ SECTION_META = {
         'subtitle': 'Review open OSAS actions, compliance items, and campus readiness tasks.',
     },
     'emergency': {
-        'title': 'Emergency Plans and Drills',
-        'subtitle': 'Maintain evacuation plans, emergency drills, and response assignments.',
+        'title': 'Emergency Plans',
+        'subtitle': 'Maintain evacuation plans, emergency drills, and campus emergency status.',
     },
     'patrol': {
-        'title': 'Predictive Patrol Planning',
-        'subtitle': 'Generate a risk-prioritized patrol sequence using OSRM-ready routing data.',
+        'title': 'Patrol Operations',
+        'subtitle': 'Coordinate patrol teams, routes, checkpoints, and coverage in one operations view.',
     },
     'teams': {
-        'title': 'Teams and Checkpoints',
-        'subtitle': 'Manage guard teams, active shifts, and QR/NFC/GPS checkpoints.',
+        'title': 'Teams & Checkpoints',
+        'subtitle': 'Manage guard teams, active shifts, and QR/NFC/GPS security checkpoints.',
     },
     'reports': {
-        'title': 'Reports and Analytics',
+        'title': 'Reports & Analytics',
         'subtitle': 'Review safety trends, patrol performance, risk exposure, and compliance exports.',
     },
     'activity': {
@@ -212,11 +212,11 @@ def attach_incident_file():
     if not code or not file or not file.filename:
         flash('Incident code and attachment file are required.', 'error')
     else:
-        path = safety_svc.add_incident_attachment(code, file, file.filename, _uid())
+        path, err = safety_svc.add_incident_attachment(code, file, file.filename, _uid())
         if path:
             flash(f'Attachment saved for {code}.', 'success')
         else:
-            flash('Incident not found.', 'error')
+            flash(err or 'Unable to save attachment.', 'error')
     return redirect(url_for('safety.incidents'))
 
 

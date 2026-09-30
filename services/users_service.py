@@ -1,10 +1,10 @@
 import secrets
 import string
-from datetime import datetime
 
 from models.database import execute, query_all, query_one
 from models.user import User
 from services.analytics_service import log_event
+from services.rbac import ROLE_LABELS
 
 
 KNOWN_AUDIT_EVENTS = [
@@ -12,17 +12,10 @@ KNOWN_AUDIT_EVENTS = [
     "account_disabled",
     "account_enabled",
     "permission_denied",
-    "fine_waived",
     "login_failed",
     "password_reset",
     "user_created",
     "report_exported",
-    "fine_paid",
-    "checkout",
-    "return",
-    "renewal",
-    "reservation_created",
-    "ebook_access_granted",
 ]
 
 
@@ -34,22 +27,22 @@ def get_activity_event_types():
     return list(dict.fromkeys(KNOWN_AUDIT_EVENTS + db_types))
 
 
-def list_users(role=None, card_status=None, account_status=None, search=None, page=None, per_page=10):
+def list_users(role=None, account_status=None, search=None, page=None, per_page=10, **_ignored):
     where = " WHERE 1=1"
     params = []
     if role:
         where += " AND role = %s"
         params.append(role)
-    if card_status:
-        where += " AND card_status = %s"
-        params.append(card_status)
     if account_status:
         where += " AND account_status = %s"
         params.append(account_status)
     if search:
         like = f"%{search.strip()}%"
-        where += " AND (full_name LIKE %s OR library_id LIKE %s OR username LIKE %s OR email LIKE %s)"
+        where += " AND (full_name LIKE %s OR campus_id LIKE %s OR username LIKE %s OR email LIKE %s)"
         params.extend([like, like, like, like])
+
+    select_cols = """id, username, email, full_name, role, campus_id,
+                     account_status, must_change_password, created_at, profile_image"""
 
     if page is not None:
         total = query_one(f"SELECT COUNT(*) AS c FROM users{where}", params)["c"]
@@ -57,16 +50,14 @@ def list_users(role=None, card_status=None, account_status=None, search=None, pa
 
         limit_sql, limit_params = sql_page_clause(page, per_page)
         sql = f"""
-            SELECT id, username, email, full_name, role, library_id, barcode,
-                   card_status, card_expiry, account_status, must_change_password, created_at
+            SELECT {select_cols}
             FROM users{where}
             ORDER BY full_name ASC{limit_sql}
         """
         return query_all(sql, params + limit_params), total
 
     sql = f"""
-        SELECT id, username, email, full_name, role, library_id, barcode,
-               card_status, card_expiry, account_status, must_change_password, created_at
+        SELECT {select_cols}
         FROM users{where}
         ORDER BY full_name ASC
     """
@@ -75,8 +66,8 @@ def list_users(role=None, card_status=None, account_status=None, search=None, pa
 
 def get_user(user_id):
     return query_one(
-        """SELECT id, username, email, full_name, role, library_id, barcode,
-                  card_status, card_expiry, account_status, must_change_password, created_at
+        """SELECT id, username, email, full_name, role, campus_id,
+                  account_status, must_change_password, created_at, profile_image
            FROM users WHERE id = %s""",
         (user_id,),
     )
@@ -91,20 +82,26 @@ def count_active_admins(exclude_user_id=None):
     return query_one(sql, params)["c"]
 
 
-def generate_library_id(role):
-    prefix = {"admin": "LIB-ADMIN", "staff": "LIB-STAFF", "patron": "LIB-PAT"}.get(role, "LIB-PAT")
+def generate_campus_id(role):
+    prefix = {
+        "admin": "OSAS",
+        "security_head": "SEC",
+        "guard": "GRD",
+        "safety_officer": "SFO",
+        "faculty_staff": "FAC",
+    }.get(role, "USR")
     row = query_one(
-        "SELECT library_id FROM users WHERE library_id LIKE %s ORDER BY id DESC LIMIT 1",
+        "SELECT campus_id FROM users WHERE campus_id LIKE %s ORDER BY id DESC LIMIT 1",
         (f"{prefix}-%",),
     )
     if row:
         try:
-            num = int(row["library_id"].rsplit("-", 1)[-1]) + 1
+            num = int(row["campus_id"].rsplit("-", 1)[-1]) + 1
         except ValueError:
             num = 1
     else:
         num = 1
-    return f"{prefix}-{num:03d}"
+    return f"{prefix}-{num:04d}"
 
 
 def generate_temp_password(length=12):
@@ -117,9 +114,9 @@ def create_user(data, actor_id):
     email = data["email"].strip()
     full_name = data["full_name"].strip()
     role = data["role"]
-    library_id = data.get("library_id", "").strip() or generate_library_id(role)
-    barcode = data.get("barcode", "").strip() or None
-    card_status = data.get("card_status", "active")
+    if role not in ROLE_LABELS:
+        return False, "Invalid role."
+    campus_id = (data.get("campus_id") or "").strip() or generate_campus_id(role)
     password = data.get("password") or generate_temp_password()
     must_change = 1 if data.get("must_change_password", True) else 0
 
@@ -127,23 +124,21 @@ def create_user(data, actor_id):
         return False, "Username already exists."
     if query_one("SELECT id FROM users WHERE email = %s", (email,)):
         return False, "Email already exists."
-    if query_one("SELECT id FROM users WHERE library_id = %s", (library_id,)):
-        return False, "Library ID already exists."
+    if query_one("SELECT id FROM users WHERE campus_id = %s", (campus_id,)):
+        return False, "Campus ID already exists."
 
     user_id = execute(
         """INSERT INTO users
-           (username, password_hash, email, full_name, role, library_id, barcode,
-            card_status, account_status, must_change_password)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active', %s)""",
+           (username, password_hash, email, full_name, role, campus_id,
+            account_status, must_change_password)
+           VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)""",
         (
             username,
             User.hash_password(password),
             email,
             full_name,
             role,
-            library_id,
-            barcode,
-            card_status,
+            campus_id,
             must_change,
         ),
     )[0]
@@ -153,7 +148,7 @@ def create_user(data, actor_id):
         user_id=actor_id,
         entity_type="user",
         entity_id=user_id,
-        metadata={"role": role, "library_id": library_id},
+        metadata={"role": role, "campus_id": campus_id},
     )
     return True, {"user_id": user_id, "temp_password": password}
 
@@ -165,6 +160,10 @@ def update_user(user_id, data, actor_id, reason=None):
 
     new_role = data.get("role", existing["role"])
     new_status = data.get("account_status", existing.get("account_status", "active"))
+    new_campus = (data.get("campus_id") or existing.get("campus_id") or "").strip()
+
+    if new_role not in ROLE_LABELS:
+        return False, "Invalid role."
 
     if existing["role"] == "admin" and new_role != "admin":
         if user_id == actor_id:
@@ -178,15 +177,19 @@ def update_user(user_id, data, actor_id, reason=None):
         if existing["role"] == "admin" and count_active_admins(exclude_user_id=user_id) == 0:
             return False, "Cannot deactivate the last active admin."
 
+    if new_campus != existing.get("campus_id"):
+        clash = query_one("SELECT id FROM users WHERE campus_id = %s AND id != %s", (new_campus, user_id))
+        if clash:
+            return False, "Campus ID already exists."
+
     execute(
-        """UPDATE users SET full_name = %s, email = %s, role = %s, card_status = %s,
-           card_expiry = %s, account_status = %s WHERE id = %s""",
+        """UPDATE users SET full_name = %s, email = %s, role = %s, campus_id = %s,
+           account_status = %s WHERE id = %s""",
         (
             data.get("full_name", existing["full_name"]).strip(),
             data.get("email", existing["email"]).strip(),
             new_role,
-            data.get("card_status", existing["card_status"]),
-            data.get("card_expiry") or existing.get("card_expiry"),
+            new_campus,
             new_status,
             user_id,
         ),
@@ -228,11 +231,11 @@ def set_account_status(user_id, status, actor_id, reason=None):
     )
 
 
-def reset_password(user_id, actor_id):
+def reset_password(user_id, actor_id, password=None):
     user = get_user(user_id)
     if not user:
         return False, "User not found."
-    temp = generate_temp_password()
+    temp = password or generate_temp_password()
     execute(
         "UPDATE users SET password_hash = %s, must_change_password = 1, failed_login_attempts = 0, locked_until = NULL WHERE id = %s",
         (User.hash_password(temp), user_id),

@@ -24,18 +24,23 @@ ENDPOINT_PERMISSIONS = {
     'api.campus_map':'safety.view', 'api.readiness':'safety.view', 'api.patrol_scan':'patrol.manage', 'api.visitors':'visitor.view',
 }
 NAV_SECTIONS = [
-    {'label':'Main','items':[{'label':'Command Dashboard','endpoint':'safety.index','icon':'fa-gauge-high','permission':'dashboard.view'}]},
-    {'label':'OSAS Operations','items':[
-        {'label':'Incident Response','endpoint':'safety.incidents','icon':'fa-triangle-exclamation','permission':'safety.view'},
-        {'label':'Inspections & Risks','endpoint':'safety.inspections','icon':'fa-clipboard-check','permission':'safety.view'},
-        {'label':'Emergency Plans & Drills','endpoint':'safety.emergency','icon':'fa-person-running','permission':'safety.view'},
-        {'label':'Visitors & Gate Security','endpoint':'safety.visitors','icon':'fa-id-card','permission':'visitor.view'},
+    {'label':'Command','items':[
+        {'label':'Dashboard','endpoint':'safety.index','icon':'fa-gauge-high','permission':'dashboard.view'},
     ]},
-    {'label':'Security Patrol','items':[
-        {'label':'Predictive Patrol Planning','endpoint':'safety.patrol','icon':'fa-route','permission':'patrol.view'},
+    {'label':'Incident Response','items':[
+        {'label':'Incidents','endpoint':'safety.incidents','icon':'fa-triangle-exclamation','permission':'safety.view'},
+        {'label':'Emergency Plans','endpoint':'safety.emergency','icon':'fa-person-running','permission':'safety.view'},
+    ]},
+    {'label':'Patrol Operations','items':[
+        {'label':'Patrol Planning','endpoint':'safety.patrol','icon':'fa-route','permission':'patrol.view'},
         {'label':'Teams & Checkpoints','endpoint':'safety.teams','icon':'fa-location-crosshairs','permission':'patrol.view'},
     ]},
-    {'label':'Reports & Governance','items':[
+    {'label':'Safety & Compliance','items':[
+        {'label':'Inspections','endpoint':'safety.inspections','icon':'fa-clipboard-check','permission':'safety.view'},
+        {'label':'Visitors & Gate','endpoint':'safety.visitors','icon':'fa-id-card','permission':'visitor.view'},
+        {'label':'OSAS Operations','endpoint':'safety.osas','icon':'fa-shield-halved','permission':'safety.view'},
+    ]},
+    {'label':'Intelligence','items':[
         {'label':'Reports & Analytics','endpoint':'safety.reports','icon':'fa-chart-line','permission':'reports.view'},
         {'label':'Activity Log','endpoint':'safety.activity','icon':'fa-list-check','permission':'reports.view'},
     ]},

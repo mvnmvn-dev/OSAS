@@ -37,13 +37,253 @@ STATUS_UI = {
 }
 
 
+PRIORITY_UI = {
+    "critical": ("Critical", "critical"),
+    "high": ("High", "high"),
+    "medium": ("Medium", "medium"),
+    "low": ("Low", "low"),
+}
+
+
 def _title_status(status):
     label, css = STATUS_UI.get((status or "").lower(), ((status or "Unknown").replace("_", " ").title(), "warning"))
     return label, css
 
 
+def _priority_ui(priority):
+    label, css = PRIORITY_UI.get((priority or "medium").lower(), ("Medium", "medium"))
+    return label, css
+
+
 def _now_label():
     return datetime.now().strftime("%I:%M %p").lstrip("0")
+
+
+def _fmt_time(value):
+    if not value:
+        return ""
+    if isinstance(value, str):
+        return value
+    return value.strftime("%I:%M %p").lstrip("0")
+
+
+def _fmt_datetime(value):
+    if not value:
+        return ""
+    return value.strftime("%B %d, %Y") + " - " + value.strftime("%I:%M %p").lstrip("0")
+
+
+def _relative_ago(value):
+    if not value:
+        return "Just now"
+    if isinstance(value, str):
+        return value
+    delta = datetime.now() - value
+    minutes = max(0, int(delta.total_seconds() // 60))
+    if minutes < 1:
+        return "Just now"
+    if minutes == 1:
+        return "1 minute ago"
+    if minutes < 60:
+        return f"{minutes} minutes ago"
+    hours = minutes // 60
+    if hours == 1:
+        return "1 hour ago"
+    if hours < 24:
+        return f"{hours} hours ago"
+    days = hours // 24
+    return "1 day ago" if days == 1 else f"{days} days ago"
+
+
+def _incident_timeline(row):
+    """Build a chronological timeline from existing incident timestamps."""
+    events = []
+    if row.get("reported_at"):
+        events.append({"time": _fmt_time(row["reported_at"]), "text": "Incident reported", "at": row["reported_at"]})
+    if row.get("verified_at"):
+        events.append({"time": _fmt_time(row["verified_at"]), "text": "Incident verified", "at": row["verified_at"]})
+    if row.get("assigned_to") and row.get("assignee_name"):
+        assign_at = row.get("verified_at") or row.get("reported_at")
+        events.append({
+            "time": _fmt_time(assign_at),
+            "text": f"Assigned to {row['assignee_name']}",
+            "at": assign_at,
+        })
+    status = (row.get("status") or "").lower()
+    if status == "responding":
+        events.append({
+            "time": _fmt_time(row.get("verified_at") or row.get("reported_at")),
+            "text": "Response in progress",
+            "at": row.get("verified_at") or row.get("reported_at"),
+        })
+    if row.get("resolved_at"):
+        label = "Incident closed" if status == "closed" else "Area secured / incident resolved"
+        events.append({"time": _fmt_time(row["resolved_at"]), "text": label, "at": row["resolved_at"]})
+    seen = set()
+    out = []
+    for event in events:
+        key = (event["time"], event["text"])
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append({"time": event["time"], "text": event["text"]})
+    return out
+
+
+def _campus_security_status(open_incidents, high_priority, critical_open, missed, coverage, readiness):
+    """Derive campus status from real operational signals (no invented threat levels)."""
+    now = datetime.now()
+    stamp = now.strftime("%B %d, %Y") + " - " + now.strftime("%I:%M %p").lstrip("0")
+    if critical_open > 0:
+        return {
+            "key": "alert",
+            "label": "SECURITY ALERT",
+            "tone": "critical",
+            "datetime": stamp,
+            "updated": "Updated just now",
+            "detail": f"{critical_open} critical incident{'s' if critical_open != 1 else ''} require{'s' if critical_open == 1 else ''} immediate attention",
+        }
+    if readiness < 50 or (coverage < 50 and missed > 0):
+        return {
+            "key": "degraded",
+            "label": "SYSTEM DEGRADED",
+            "tone": "degraded",
+            "datetime": stamp,
+            "updated": "Updated just now",
+            "detail": f"Readiness {readiness}% · patrol coverage {coverage}%",
+        }
+    if high_priority > 0 or open_incidents > 0 or missed > 0 or coverage < 80:
+        return {
+            "key": "attention",
+            "label": "ATTENTION REQUIRED",
+            "tone": "attention",
+            "datetime": stamp,
+            "updated": "Updated just now",
+            "detail": f"{open_incidents} open incident{'s' if open_incidents != 1 else ''} · {missed} missed scan{'s' if missed != 1 else ''}",
+        }
+    return {
+        "key": "operational",
+        "label": "SYSTEM OPERATIONAL",
+        "tone": "operational",
+        "datetime": stamp,
+        "updated": "Updated just now",
+        "detail": "No critical issues requiring immediate attention",
+    }
+
+
+def _build_priority_actions(all_incidents, patrol_meta, actions, inspections, drills, urls):
+    """Surface existing records that need attention — dashboard summary only."""
+    items = []
+    for incident in all_incidents:
+        if incident["status_key"] in ("resolved", "closed"):
+            continue
+        priority = (incident.get("priority") or "medium").lower()
+        if priority == "critical":
+            items.append({
+                "tone": "critical",
+                "label": "Critical",
+                "title": f"Incident at {incident['location']} requires response",
+                "detail": incident["title"],
+                "action": "View Incident",
+                "url": urls["incidents"],
+                "code": incident["code"],
+            })
+        elif priority == "high":
+            items.append({
+                "tone": "high",
+                "label": "Attention",
+                "title": incident["title"],
+                "detail": f"{incident['location']} · {incident['time']}",
+                "action": "View Incident",
+                "url": urls["incidents"],
+                "code": incident["code"],
+            })
+    if patrol_meta.get("missed", 0) > 0:
+        items.append({
+            "tone": "high",
+            "label": "Attention",
+            "title": f"{patrol_meta['missed']} checkpoint scan{'s' if patrol_meta['missed'] != 1 else ''} missed",
+            "detail": f"Coverage at {patrol_meta.get('coverage', 0)}% this week",
+            "action": "Review",
+            "url": urls["patrol"],
+            "code": None,
+        })
+    for action in actions[:2]:
+        items.append({
+            "tone": "medium",
+            "label": "Pending",
+            "title": action.get("title") or "OSAS action pending",
+            "detail": action.get("detail") or "",
+            "action": "Review",
+            "url": urls["inspections"],
+            "code": None,
+        })
+    for insp in inspections:
+        if insp.get("status") in ("Scheduled", "Overdue", "Follow-up"):
+            items.append({
+                "tone": "medium",
+                "label": "Pending",
+                "title": "Inspection requires attention",
+                "detail": f"{insp.get('zone')} · {insp.get('status')}",
+                "action": "Review",
+                "url": urls["inspections"],
+                "code": None,
+            })
+            break
+    for drill in drills:
+        if drill.get("status") in ("Planned", "Scheduled"):
+            items.append({
+                "tone": "medium",
+                "label": "Pending",
+                "title": "Emergency drill confirmation required",
+                "detail": drill.get("title") or drill.get("schedule") or "",
+                "action": "Review",
+                "url": urls["emergency"],
+                "code": None,
+            })
+            break
+    return items[:6]
+
+
+def _build_live_activity(activity, all_incidents):
+    """Dashboard live feed from existing audit + incident events."""
+    feed = []
+    for a in activity[:8]:
+        detail = a.get("detail") or ""
+        time_label = _now_label() if str(detail).startswith("Today") else (detail.split("·")[0].strip() if "·" in detail else "")
+        feed.append({
+            "time": time_label or "—",
+            "title": a.get("title") or "System event",
+            "detail": detail,
+            "module": a.get("module") or "system",
+        })
+    for incident in all_incidents[:3]:
+        if incident["status_key"] in ("reported", "verified", "responding"):
+            feed.append({
+                "time": incident.get("time") or "—",
+                "title": f"Incident {incident['status'].lower()}",
+                "detail": f"{incident['title']} · {incident['location']}",
+                "module": "incident",
+            })
+    return feed[:10]
+
+
+def _checkpoint_scan_history(checkpoint_id, limit=4):
+    rows = query_all(
+        """SELECT scanned_at, result FROM patrol_logs
+           WHERE checkpoint_id=%s ORDER BY scanned_at DESC LIMIT %s""",
+        (checkpoint_id, limit),
+    )
+    out = []
+    for r in rows:
+        result = (r.get("result") or "valid").lower()
+        ok = result == "valid"
+        out.append({
+            "time": _fmt_time(r.get("scanned_at")),
+            "label": "Scanned" if ok else result.replace("_", " ").title(),
+            "ok": ok,
+        })
+    return out
 
 
 # BCP MV Campus center — Lot 762, Topaz cor. Sapphire St., Brgy. San Agustin, Novaliches, QC
@@ -259,24 +499,45 @@ def _incident_rows():
         FROM incidents i
         LEFT JOIN campus_zones z ON z.id = i.zone_id
         LEFT JOIN users u ON u.id = i.assigned_to
-        ORDER BY i.reported_at DESC
+        ORDER BY
+            FIELD(i.priority, 'critical', 'high', 'medium', 'low'),
+            FIELD(i.status, 'responding', 'verified', 'reported', 'resolved', 'closed'),
+            i.reported_at DESC
         """
     )
     out = []
     for r in rows:
         label, css = _title_status(r["status"])
+        p_label, p_css = _priority_ui(r.get("priority"))
+        status_phrase = {
+            "reported": "Reported",
+            "verified": "Verified",
+            "responding": "Response in progress",
+            "resolved": "Resolved",
+            "closed": "Closed",
+        }.get((r.get("status") or "").lower(), label)
+        location = r.get("zone_name")
+        if not location:
+            desc = (r.get("description") or "").split("\n")[0].strip()
+            location = desc[:80] if desc else "Unspecified zone"
         out.append({
             "id": r["id"],
             "code": r["incident_code"],
             "title": r["title"],
-            "location": r.get("zone_name") or "Unspecified zone",
-            "time": r["reported_at"].strftime("%I:%M %p").lstrip("0") if r.get("reported_at") else "",
+            "location": location,
+            "time": _fmt_time(r.get("reported_at")),
+            "reported_full": _fmt_datetime(r.get("reported_at")),
             "status": label,
+            "status_phrase": status_phrase,
             "status_key": r["status"],
             "status_class": css,
-            "priority": r["priority"],
+            "priority": (r.get("priority") or "medium").lower(),
+            "priority_label": p_label,
+            "priority_class": p_css,
             "team": r.get("assignee_name"),
             "zone_id": r.get("zone_id"),
+            "timeline": _incident_timeline(r),
+            "updated_ago": _relative_ago(r.get("resolved_at") or r.get("verified_at") or r.get("reported_at")),
         })
     return out
 
@@ -300,12 +561,16 @@ def _checkpoint_rows():
         score = w.get("score") or float(r.get("risk") or 0) or 50
         tone = w.get("tone") or ("danger" if score >= 80 else "warning" if score >= 65 else "success")
         last = r.get("last_scan")
+        history = _checkpoint_scan_history(r["id"])
+        delayed = any(not h["ok"] for h in history[:1]) if history else False
+        on_schedule = bool(last) and not delayed
         out.append({
             "id": r["id"],
             "code": r["checkpoint_code"],
             "name": r["checkpoint_name"],
             "method": "QR",
             "last_scan": last.strftime("%I:%M %p").lstrip("0") if last else "—",
+            "last_scan_ago": _relative_ago(last) if last else "No scans yet",
             "risk": score,
             "official_risk": official_risk,
             "official_score": official_score,
@@ -316,6 +581,11 @@ def _checkpoint_rows():
             "scan_token": r["scan_token"],
             "map_class": {"G1": "gate", "G2": "gate", "G3": "gate", "LAB1": "science", "ST1": "quad", "ST2": "center", "AD4": "command", "PR2": "perimeter"}.get(r["checkpoint_code"]),
             "zone_name": r.get("zone_name"),
+            "active": True,
+            "patrol_status": "On Schedule" if on_schedule else ("Delayed" if delayed else "Awaiting scan"),
+            "patrol_status_ok": on_schedule,
+            "history": history,
+            "risk_level": official_risk.upper(),
         })
     return out
 
@@ -755,11 +1025,14 @@ def get_safety_dashboard(section="overview", status_filter=None):
 
     open_incidents = sum(1 for i in all_incidents if i["status_key"] in ("reported", "verified", "responding"))
     high_priority = sum(1 for i in all_incidents if i.get("priority") in ("high", "critical") and i["status_key"] not in ("resolved", "closed"))
+    critical_open = sum(1 for i in all_incidents if i.get("priority") == "critical" and i["status_key"] not in ("resolved", "closed"))
+    active_incidents = [i for i in all_incidents if i["status_key"] in ("reported", "verified", "responding")]
     guards = query_one("SELECT COUNT(*) AS c FROM users WHERE role IN ('guard','security_head') AND account_status='active'")["c"]
     operational = _operational_metrics()
     readiness = operational["readiness"]
     avg_risk = round(sum(c["risk"] for c in display_checkpoints) / max(1, len(display_checkpoints)), 1) if display_checkpoints else 0
     on_duty_teams = sum(1 for t in teams if t["status"] == "On duty")
+    standby_teams = max(0, len(teams) - on_duty_teams)
     insp_scheduled = sum(1 for i in inspections if i["status"] == "Scheduled")
     insp_completed = sum(1 for i in inspections if i["status"] == "Completed")
     insp_followups = sum(1 for i in inspections if i["status"] == "Follow-up")
@@ -791,12 +1064,27 @@ def get_safety_dashboard(section="overview", status_filter=None):
         "activity": url_for("safety.activity"),
     }
 
+    covered_cp = max(0, len(display_checkpoints) - int(patrol_meta.get("missed") or 0))
+    total_cp = max(1, len(display_checkpoints))
+    last_updated_label = "Updated just now"
+
+    campus_status = _campus_security_status(
+        open_incidents=open_incidents,
+        high_priority=high_priority,
+        critical_open=critical_open,
+        missed=int(patrol_meta.get("missed") or 0),
+        coverage=int(patrol_meta.get("coverage") or 0),
+        readiness=readiness,
+    )
+    priority_actions = _build_priority_actions(all_incidents, patrol_meta, actions, inspections, drills, u)
+    live_activity = _build_live_activity(activity, all_incidents)
+
     kpi_catalog = {
         "overview": [
-            {"label": "Open Incidents", "value": f"{open_incidents:02d}", "hint": f"{counts.get('responding', 0)} responding now", "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
-            {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": f"{patrol_meta['completed']} of {patrol_meta['planned']} routes", "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
-            {"label": "Campus Readiness", "value": f"{readiness}%", "hint": f"{len(actions)} open OSAS items", "theme": "amber", "icon": "fa-shield-heart", "url": u["emergency"]},
-            {"label": "Teams On Duty", "value": f"{on_duty_teams:02d}", "hint": f"{guards} security staff", "theme": "indigo", "icon": "fa-user-shield", "url": u["teams"]},
+            {"label": "Active Incidents", "value": f"{open_incidents:02d}", "hint": f"{high_priority} require immediate attention", "updated": last_updated_label, "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
+            {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": f"{covered_cp} / {total_cp} checkpoints covered", "updated": last_updated_label, "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
+            {"label": "Personnel on Duty", "value": f"{on_duty_teams:02d}", "hint": f"{on_duty_teams} active · {standby_teams} standby", "updated": last_updated_label, "theme": "indigo", "icon": "fa-user-shield", "url": u["teams"]},
+            {"label": "Campus Readiness", "value": f"{readiness}%", "hint": f"{len(actions)} actions pending", "updated": last_updated_label, "theme": "amber", "icon": "fa-shield-heart", "url": u["emergency"]},
         ],
         "incidents": [
             {"label": "Reported", "value": f"{counts.get('reported', 0):02d}", "hint": "Awaiting verification", "theme": "red", "icon": "fa-bullhorn", "url": f"{u['incidents']}?status=reported"},
@@ -823,14 +1111,14 @@ def get_safety_dashboard(section="overview", status_filter=None):
             {"label": "Readiness", "value": f"{readiness}%", "hint": "Inspections + drills + risk", "theme": "emerald", "icon": "fa-shield-heart", "url": f"{u['emergency']}#drill-register"},
         ],
         "patrol": [
-            {"label": "Coverage", "value": f"{patrol_meta['coverage']}%", "hint": "Valid scans this week", "theme": "emerald", "icon": "fa-route", "url": f"{u['patrol']}#route-performance"},
+            {"label": "Coverage", "value": f"{patrol_meta['coverage']}%", "hint": "Valid scans this week", "updated": last_updated_label, "theme": "emerald", "icon": "fa-route", "url": f"{u['patrol']}#route-performance"},
             {"label": "Completed", "value": f"{patrol_meta['completed']}", "hint": f"Of {patrol_meta['planned']} planned routes", "theme": "indigo", "icon": "fa-flag-checkered", "url": f"{u['patrol']}#route-performance"},
             {"label": "Missed Scans", "value": f"{patrol_meta['missed']:02d}", "hint": "Late / invalid / missed", "theme": "red", "icon": "fa-circle-xmark", "url": f"{u['patrol']}#route-performance"},
             {"label": "Active Routes", "value": f"{patrol_meta['active_routes']:02d}", "hint": patrol_meta.get("assigned_team") or patrol_meta["engine"], "theme": "amber", "icon": "fa-location-arrow", "url": f"{u['patrol']}#route-board"},
         ],
         "teams": [
             {"label": "Teams", "value": f"{len(teams):02d}", "hint": "Active registry", "theme": "indigo", "icon": "fa-users", "url": f"{u['teams']}#teams-panel"},
-            {"label": "On Duty", "value": f"{on_duty_teams:02d}", "hint": "Active shifts now", "theme": "emerald", "icon": "fa-user-check", "url": f"{u['teams']}#teams-panel"},
+            {"label": "On Duty", "value": f"{on_duty_teams:02d}", "hint": "Active shifts now", "updated": last_updated_label, "theme": "emerald", "icon": "fa-user-check", "url": f"{u['teams']}#teams-panel"},
             {"label": "Guards", "value": f"{guards}", "hint": "Guard + security head", "theme": "amber", "icon": "fa-user-shield", "url": f"{u['teams']}#teams-panel"},
             {"label": "Checkpoints", "value": f"{len(display_checkpoints)}", "hint": f"Avg risk {avg_risk}", "theme": "red", "icon": "fa-location-crosshairs", "url": f"{u['teams']}#checkpoints-panel"},
         ],
@@ -893,6 +1181,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
     ]
 
     analytics = None
+    risk_demo = None
     if section == "overview":
         analytics = _build_dashboard_analytics(
             open_incidents=open_incidents,
@@ -909,6 +1198,17 @@ def get_safety_dashboard(section="overview", status_filter=None):
             actions_count=len(actions),
             avg_risk=avg_risk,
         )
+    if section in ("overview", "patrol"):
+        top_cp = None
+        weights = risk_scoring.checkpoint_priority_weights()
+        if weights:
+            top_cp = risk_scoring.explain_checkpoint_score(weights[0]["checkpoint_id"])
+        risk_demo = {
+            "model": risk_scoring.risk_model_card(),
+            "sample": risk_scoring.sample_risk_calculation(),
+            "top_checkpoint": top_cp,
+            "pipeline": risk_scoring.risk_model_card()["pipeline"],
+        }
 
     return {
         "date_label": datetime.now().strftime("%A, %B %d, %Y"),
@@ -916,6 +1216,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         "kpis": kpi_catalog.get(section, kpi_catalog["overview"]),
         "zones": zones[:3],
         "incidents": incidents,
+        "active_incidents": active_incidents[:6],
         "inspections": inspections,
         "actions": actions,
         "drills": drills,
@@ -932,6 +1233,11 @@ def get_safety_dashboard(section="overview", status_filter=None):
             "engine": patrol_meta["engine"],
             "assigned_team": patrol_meta.get("assigned_team"),
             "risk_reason": f"{zones[0]['name']} is prioritized (risk {zones[0]['score']})." if zones else "Risk-weighted sequence ready.",
+            "routing_note": (
+                f"Routed with {patrol_meta['engine']}."
+                if (patrol_meta.get("engine") or "").upper() == "OSRM"
+                else "Heuristic distance fallback (OSRM unavailable) — not equivalent to road-aware routing."
+            ),
         },
         "readiness": {
             "score": readiness,
@@ -940,12 +1246,22 @@ def get_safety_dashboard(section="overview", status_filter=None):
             "open_risks": len(actions),
         },
         "activity": activity,
+        "live_activity": live_activity,
+        "priority_actions": priority_actions,
+        "campus_status": campus_status,
+        "last_updated": last_updated_label,
         "trends": trends,
         "pagination": pagination,
         "hero": {"checkpoints": len(all_checkpoints), "readiness": readiness, "avg_response": operational["avg_response"]},
         "report_types": report_types,
         "visitors": visitors,
         "analytics": analytics,
+        "risk_demo": risk_demo,
+        "emergency_status": {
+            "normal": critical_open == 0 and open_incidents == 0,
+            "label": "NORMAL" if critical_open == 0 and open_incidents == 0 else "ACTIVE RESPONSE",
+            "detail": "No active emergency protocols" if critical_open == 0 and open_incidents == 0 else f"{open_incidents} open incident{'s' if open_incidents != 1 else ''} under monitoring",
+        },
         "map": {
             "center": [
                 current_app.config.get("CAMPUS_MAP_LAT", MV_CENTER_LAT),
@@ -1225,11 +1541,22 @@ def record_checkpoint_scan(token_or_code, guard_id=None, team_id=None, method="q
 def add_incident_attachment(incident_code, storage, filename, user_id=None):
     row = query_one("SELECT id FROM incidents WHERE incident_code=%s", (incident_code,))
     if not row:
-        return None
+        return None, "Incident not found."
     upload_root = current_app.config.get("UPLOAD_FOLDER", "static/uploads")
     folder = os.path.join(upload_root, "incidents")
     os.makedirs(folder, exist_ok=True)
     safe = secure_filename(filename) or "attachment.bin"
+    ext = safe.rsplit(".", 1)[-1].lower() if "." in safe else ""
+    allowed = current_app.config.get("ALLOWED_ATTACHMENT_EXTENSIONS") or set()
+    if allowed and ext not in allowed:
+        return None, f"File type .{ext or '?'} is not allowed."
+    max_mb = float(current_app.config.get("MAX_ATTACHMENT_MB") or 5)
+    # Prefer Content-Length / stream size when available
+    storage.stream.seek(0, os.SEEK_END)
+    size = storage.stream.tell()
+    storage.stream.seek(0)
+    if size > max_mb * 1024 * 1024:
+        return None, f"File exceeds the {int(max_mb)} MB limit."
     unique = f"{uuid.uuid4().hex}_{safe}"
     path = os.path.join(folder, unique)
     storage.save(path)
@@ -1242,7 +1569,7 @@ def add_incident_attachment(incident_code, storage, filename, user_id=None):
         (row["id"], rel, safe, user_id),
     )
     write_audit("Incident attachment uploaded", "incident_attachment", aid, new_values={"incident": incident_code, "file": safe})
-    return rel
+    return rel, None
 
 
 def queue_parent_notification(incident_code, recipient_name, channel, message, phone=None, email=None):

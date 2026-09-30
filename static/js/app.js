@@ -1,4 +1,4 @@
-// CSRF token injection for POST forms
+// CSRF token injection for POST forms + fetch helpers
 (function injectCsrfTokens() {
     const token = document.querySelector('meta[name="csrf-token"]')?.content;
     if (!token) return;
@@ -12,6 +12,13 @@
         }
     });
 })();
+
+function csrfHeaders(extra = {}) {
+    const token = document.querySelector('meta[name="csrf-token"]')?.content;
+    return token
+        ? { 'X-CSRFToken': token, 'X-CSRF-Token': token, ...extra }
+        : { ...extra };
+}
 
 // Sidebar toggle
 const menuToggle = document.getElementById('menu-toggle');
@@ -448,7 +455,10 @@ document.querySelectorAll('.notif-item[data-id]').forEach(item => {
         if (!id || !item.classList.contains('unread')) return;
         e.preventDefault();
         try {
-            const res = await fetch(`/notifications/${id}/read`, { method: 'POST' });
+            const res = await fetch(`/notifications/${id}/read`, {
+                method: 'POST',
+                headers: csrfHeaders({ 'Content-Type': 'application/json' }),
+            });
             const data = await res.json();
             item.classList.remove('unread');
             if (data.data?.unread_count !== undefined) {
@@ -465,12 +475,35 @@ if (notifReadAll) {
         e.preventDefault();
         e.stopPropagation();
         try {
-            const res = await fetch('/notifications/read-all', { method: 'POST' });
+            const res = await fetch('/notifications/read-all', {
+                method: 'POST',
+                headers: csrfHeaders({ 'Content-Type': 'application/json' }),
+            });
             const data = await res.json();
             document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
             updateNotifBadge(0);
             notifReadAll.style.display = 'none';
         } catch { /* ignore */ }
+    });
+}
+
+// System status popover
+const sysStatusToggle = document.getElementById('sys-status-toggle');
+const sysStatusPanel = document.getElementById('sys-status-panel');
+if (sysStatusToggle && sysStatusPanel) {
+    sysStatusToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = !sysStatusPanel.classList.contains('open');
+        sysStatusPanel.classList.toggle('open', open);
+        sysStatusToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        notifDropdown?.classList.remove('open');
+        document.getElementById('profile-menu')?.classList.remove('open');
+    });
+    document.addEventListener('click', (e) => {
+        if (!sysStatusPanel.contains(e.target) && !sysStatusToggle.contains(e.target)) {
+            sysStatusPanel.classList.remove('open');
+            sysStatusToggle.setAttribute('aria-expanded', 'false');
+        }
     });
 }
 
@@ -735,15 +768,14 @@ function initDarkMode() {
 }
 
 const COMMAND_MODULES = [
-    { label: 'Dashboard', url: '/dashboard/', icon: 'fa-house', keywords: 'home' },
-    { label: 'Search Books', url: '/search/', icon: 'fa-search', keywords: 'find catalog' },
-    { label: 'Borrowing Logs', url: '/borrowing/', icon: 'fa-right-left', keywords: 'loans renew' },
-    { label: 'Fines', url: '/fines/', icon: 'fa-clock', keywords: 'pay overdue' },
-    { label: 'Reservations', url: '/reservations/', icon: 'fa-bookmark', keywords: 'hold queue' },
-    { label: 'E-Books', url: '/ebooks/', icon: 'fa-tablet-screen-button', keywords: 'digital read' },
-    { label: 'Inventory', url: '/inventory/', icon: 'fa-boxes-stacked', keywords: 'books manage' },
-    { label: 'Clearance', url: '/clearance/', icon: 'fa-clipboard-check', keywords: 'graduate exit' },
-    { label: 'Reports', url: '/reports/', icon: 'fa-chart-line', keywords: 'analytics' },
+    { label: 'Dashboard', url: '/safety/', icon: 'fa-gauge-high', keywords: 'command home security' },
+    { label: 'Incidents', url: '/safety/incidents', icon: 'fa-triangle-exclamation', keywords: 'response alert' },
+    { label: 'Emergency Plans', url: '/safety/emergency', icon: 'fa-person-running', keywords: 'drill evacuation' },
+    { label: 'Patrol Planning', url: '/safety/patrol', icon: 'fa-route', keywords: 'route coverage' },
+    { label: 'Teams & Checkpoints', url: '/safety/teams', icon: 'fa-location-crosshairs', keywords: 'guards scan qr' },
+    { label: 'Inspections', url: '/safety/inspections', icon: 'fa-clipboard-check', keywords: 'compliance risk' },
+    { label: 'Reports & Analytics', url: '/safety/reports', icon: 'fa-chart-line', keywords: 'analytics trends' },
+    { label: 'Activity Log', url: '/safety/activity', icon: 'fa-list-check', keywords: 'audit feed' },
 ];
 
 function initCommandPalette() {

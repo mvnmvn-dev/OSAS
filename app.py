@@ -47,17 +47,20 @@ def create_app():
     def not_found(e): return render_template('errors/404.html'), 404
     @app.post('/notifications/<int:notification_id>/read')
     @login_required
-    @csrf.exempt
     def notification_read(notification_id):
         mark_read(notification_id, current_user.id)
         return jsonify({'ok': True})
     @app.post('/notifications/read-all')
     @login_required
-    @csrf.exempt
     def notifications_read_all():
         mark_all_read(current_user.id)
         return jsonify({'ok': True})
     return app
 
 app = create_app()
-if __name__ == '__main__': app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == '__main__':
+    # Prefer FLASK_DEBUG / Config.DEBUG. Never force debug in production.
+    debug = bool(app.config.get('DEBUG')) and app.config.get('FLASK_ENV') != 'production'
+    host = os.getenv('FLASK_HOST', '127.0.0.1' if not debug else '0.0.0.0')
+    port = int(os.getenv('FLASK_PORT', '5000'))
+    app.run(host=host, port=port, debug=debug)

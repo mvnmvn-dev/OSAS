@@ -95,6 +95,14 @@
 
                     </button>
 
+                    <span class="header-brand" aria-label="BCP Safety and Security">
+
+                        <i class="fas fa-shield-halved" aria-hidden="true"></i>
+
+                        BCP Safety &amp; Security
+
+                    </span>
+
                     {% if current_user.is_authenticated %}
 
                     <span class="header-role-badge role-badge role-{{ user_role }}" title="Acting as {{ role_label }}">
@@ -109,7 +117,39 @@
 
                 <div class="header-right">
 
-                    <span id="clock" class="header-clock show-sm hidden-el"></span>
+                    <span id="clock" class="header-clock show-sm hidden-el" aria-live="polite"></span>
+
+
+
+                    {% if current_user.is_authenticated %}
+
+                    <div class="sys-status-wrap">
+
+                        <button type="button" id="sys-status-toggle" class="sys-status-btn" aria-expanded="false" aria-controls="sys-status-panel" title="System status">
+
+                            <span class="sys-status-dot" aria-hidden="true"></span>
+
+                            <span class="sys-status-label">System Operational</span>
+
+                        </button>
+
+                        <div id="sys-status-panel" class="sys-status-panel" role="status">
+
+                            <h3>System Status</h3>
+
+                            <div class="sys-status-row"><span>Application</span><strong>Operational</strong></div>
+
+                            <div class="sys-status-row"><span>Database</span><strong>Operational</strong></div>
+
+                            <div class="sys-status-row"><span>Notifications</span><strong>Operational</strong></div>
+
+                            <div class="sys-status-row"><span>QR / Patrol Scan</span><strong>Operational</strong></div>
+
+                        </div>
+
+                    </div>
+
+                    {% endif %}
 
 
 
@@ -169,7 +209,15 @@
 
                                 {% else %}
 
-                                <p class="notif-empty">No notifications yet</p>
+                                <div class="notif-empty-rich">
+
+                                    <i class="fas fa-bell" aria-hidden="true"></i>
+
+                                    <strong>You're all caught up</strong>
+
+                                    <p>There are no new security notifications.</p>
+
+                                </div>
 
                                 {% endfor %}
 
@@ -189,7 +237,7 @@
 
                             {{ user_avatar(current_user, 'sm') }}
 
-                            <i class="fas fa-chevron-down profile-chevron"></i>
+                            <i class="fas fa-ellipsis-vertical profile-chevron" aria-hidden="true"></i>
 
                         </button>
 
@@ -227,6 +275,28 @@
 
                                 </a>
 
+                                <button type="button" id="theme-toggle" class="profile-menu-link" role="menuitem">
+
+                                    <i class="fas fa-moon" id="theme-icon"></i> Appearance
+
+                                </button>
+
+                                <button type="button" class="profile-menu-link" role="menuitem" onclick="toggleFullscreen()">
+
+                                    <i class="fas fa-expand" id="fullscreen-icon"></i> Fullscreen
+
+                                </button>
+
+                                {% if has_perm('search.view') %}
+
+                                <button type="button" id="search-toggle" class="profile-menu-link" role="menuitem">
+
+                                    <i class="fas fa-search"></i> Search
+
+                                </button>
+
+                                {% endif %}
+
                             </div>
 
                             <div class="profile-menu-footer">
@@ -242,30 +312,6 @@
                         </div>
 
                     </div>
-
-
-
-                    <button id="theme-toggle" class="header-icon-btn" title="Toggle dark mode" aria-label="Toggle dark mode">
-
-                        <i class="fas fa-moon" id="theme-icon"></i>
-
-                    </button>
-
-                    <button onclick="toggleFullscreen()" class="header-icon-btn" title="Fullscreen" aria-label="Fullscreen">
-
-                        <i class="fas fa-expand" id="fullscreen-icon"></i>
-
-                    </button>
-
-                    {% if has_perm('search.view') %}
-
-                    <button id="search-toggle" class="header-icon-btn" title="Search" aria-label="Search">
-
-                        <i class="fas fa-search"></i>
-
-                    </button>
-
-                    {% endif %}
 
                 </div>
 

@@ -61,4 +61,5 @@ with app.app_context():
     cur.close()
     from services.safety_service import ensure_campus_seed
     ensure_campus_seed()
-    print("OSAS database initialized. Demo password: password123")
+    print("OSAS database initialized.")
+    print("DEMO/DEV credentials only (not for production): admin / security.head · password123")

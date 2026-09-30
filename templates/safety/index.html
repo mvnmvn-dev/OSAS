@@ -1,17 +1,18 @@
 {% extends "base.html" %}
 {% from 'macros/pagination.html' import render_pagination %}
 {% set titles = {
-    'overview': 'Command Dashboard',
-    'incidents': 'Incident Response',
-    'inspections': 'Inspections and Risks',
-    'emergency': 'Emergency Plans and Drills',
-    'patrol': 'Predictive Patrol Planning',
-    'teams': 'Teams and Checkpoints',
-    'reports': 'Reports and Analytics',
+    'overview': 'Campus Security Dashboard',
+    'incidents': 'Incidents',
+    'inspections': 'Inspections',
+    'emergency': 'Emergency Plans',
+    'patrol': 'Patrol Operations',
+    'teams': 'Teams & Checkpoints',
+    'reports': 'Reports & Analytics',
     'activity': 'Activity Log',
-    'osas': 'OSAS Operations'
+    'osas': 'OSAS Operations',
+    'visitors': 'Visitors & Gate'
 } %}
-{% block title %}{{ titles.get(section, 'Command Dashboard') }} | BCP Safety and Security{% endblock %}
+{% block title %}{{ titles.get(section, 'Campus Security Dashboard') }} | BCP Safety and Security{% endblock %}
 
 {% block page_subtitle %}
 {% if page_subtitle_text %}
@@ -46,17 +47,17 @@
 
 {% block content %}
 {% if section == 'overview' %}
-<div class="welcome-hero safety-hero mb-6">
-    <div class="welcome-hero-content">
-        <span class="welcome-hero-badge"><i class="fas fa-shield-halved"></i> BCP SAFETY AND SECURITY CAMPUS MANAGEMENT SYSTEM</span>
-        <h2 class="welcome-hero-title">Good morning, {{ current_user.full_name }}.</h2>
-        <p class="welcome-hero-subtitle">Coordinate campus readiness, incidents, patrol coverage, and compliance from one command center.</p>
+<div class="ops-mobile-order">
+<div class="campus-status-banner tone-{{ safety.campus_status.tone }}">
+    <div>
+        <p class="campus-status-kicker">Campus Security Status</p>
+        <p class="campus-status-meta">{{ safety.campus_status.datetime }}</p>
+        <p class="campus-status-meta">{{ safety.campus_status.detail }} · {{ safety.campus_status.updated }}</p>
     </div>
-    <div class="welcome-hero-stats">
-        <div class="hero-stat-pill"><span class="hero-stat-value">{{ '%02d'|format(safety.hero.checkpoints) }}</span><span class="hero-stat-label">Checkpoints</span></div>
-        <div class="hero-stat-pill"><span class="hero-stat-value">{{ safety.hero.readiness }}%</span><span class="hero-stat-label">Readiness</span></div>
-        <div class="hero-stat-pill"><span class="hero-stat-value">{{ safety.hero.avg_response }}</span><span class="hero-stat-label">Avg response</span></div>
-    </div>
+    <span class="campus-status-pill tone-{{ safety.campus_status.tone }}" role="status">
+        <span class="sys-status-dot tone-{{ safety.campus_status.tone }}" aria-hidden="true"></span>
+        {{ safety.campus_status.label }}
+    </span>
 </div>
 {% endif %}
 
@@ -70,6 +71,7 @@
                 <p class="stat-label">{{ card.label }}</p>
                 <p class="stat-value {{ card.theme }}">{{ card.value }}</p>
                 {% if card.hint %}<span class="kpi-hint">{{ card.hint }}</span>{% endif %}
+                {% if card.updated %}<span class="last-updated">{{ card.updated }}</span>{% endif %}
             </div>
             <span class="stat-card-chevron" aria-hidden="true"><i class="fas fa-chevron-right"></i></span>
         </div>
@@ -82,6 +84,7 @@
                 <p class="stat-label">{{ card.label }}</p>
                 <p class="stat-value {{ card.theme }}">{{ card.value }}</p>
                 {% if card.hint %}<span class="kpi-hint">{{ card.hint }}</span>{% endif %}
+                {% if card.updated %}<span class="last-updated">{{ card.updated }}</span>{% endif %}
             </div>
         </div>
     </div>
@@ -90,104 +93,76 @@
 </div>
 
 {% if section == 'overview' %}
-{% if safety.analytics %}
-<section class="command-analytics mb-6" aria-label="Cross-module analytics">
-    <div class="section-header analytics-section-header">
-        <div>
-            <h2 class="section-title"><i class="fas fa-chart-pie"></i> Command analytics</h2>
-            <p class="section-subtitle">Live interpretation across incidents, patrol, inspections, emergency, and teams</p>
-        </div>
-        <a href="{{ url_for('safety.reports') }}" class="btn-action">Open reports</a>
-    </div>
-
-    <div class="analytics-summary-strip">
-        <div class="analytics-summary-item">
-            <span>Incident load</span>
-            <strong>{{ safety.analytics.summary.incident_total }}</strong>
-            <small>{{ '%02d'|format(safety.analytics.summary.open_incidents) }} open · {{ safety.analytics.summary.resolved_rate }}% resolved</small>
-        </div>
-        <div class="analytics-summary-item">
-            <span>Patrol coverage</span>
-            <strong>{{ safety.analytics.summary.patrol_coverage }}%</strong>
-            <small>Target 90% · avg response {{ safety.analytics.summary.avg_response }}</small>
-        </div>
-        <div class="analytics-summary-item">
-            <span>Readiness</span>
-            <strong>{{ safety.analytics.summary.readiness }}%</strong>
-            <small>{{ safety.analytics.summary.actions_open }} OSAS actions open</small>
-        </div>
-        <div class="analytics-summary-item">
-            <span>Risk index</span>
-            <strong>{{ safety.analytics.summary.avg_risk }}</strong>
-            <small>Checkpoint-weighted campus average</small>
-        </div>
-    </div>
-
-    <div class="chart-grid chart-grid-safety mb-5">
-        <div class="chart-card chart-card-span-2">
-            <div class="chart-card-header"><i class="fas fa-wave-square"></i> Incident volume · last 14 days</div>
-            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chart-incident-trend" aria-label="Incident volume trend chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-card-header"><i class="fas fa-circle-notch"></i> Incident pipeline</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-incident-status" aria-label="Incident status distribution chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-card-header"><i class="fas fa-bolt"></i> Priority mix</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-incident-priority" aria-label="Incident priority chart"></canvas></div>
-        </div>
-        <div class="chart-card chart-card-span-2">
-            <div class="chart-card-header"><i class="fas fa-route"></i> Patrol scans · last 7 days</div>
-            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chart-patrol-trend" aria-label="Patrol scan trend chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-card-header"><i class="fas fa-gauge-high"></i> Top risk zones</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-zone-risk" aria-label="Zone risk ranking chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-card-header"><i class="fas fa-shield-halved"></i> Module health vs target</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-module-health" aria-label="Module health radar chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-card-header"><i class="fas fa-list-check"></i> Activity by module · 30 days</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-module-activity" aria-label="Module activity chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-card-header"><i class="fas fa-clipboard-check"></i> Inspection status</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-inspection-status" aria-label="Inspection status chart"></canvas></div>
-        </div>
-        <div class="chart-card">
-            <div class="chart-card-header"><i class="fas fa-user-shield"></i> Team duty status</div>
-            <div class="chart-canvas-wrap"><canvas id="chart-team-duty" aria-label="Team duty status chart"></canvas></div>
-        </div>
-    </div>
-
-    <div class="panel-card insights-panel">
+<div class="ops-split ops-priority-block">
+    <div class="panel-card">
         <div class="section-header">
             <div>
-                <h2 class="section-title"><i class="fas fa-lightbulb"></i> Cross-module insights</h2>
-                <p class="section-subtitle">What the numbers mean for campus operations right now</p>
+                <h2 class="section-title"><i class="fas fa-bolt"></i> Priority Actions</h2>
+                <p class="section-subtitle">Items requiring attention right now</p>
             </div>
         </div>
-        <div class="insights-grid">
-        {% for insight in safety.analytics.insights %}
-            <a href="{{ insight.url }}" class="insight-card insight-tone-{{ insight.tone }}">
-                <span class="insight-module-tag">{{ insight.module }}</span>
-                <p class="insight-title">{{ insight.title }}</p>
-                <p class="insight-text">{{ insight.text }}</p>
-            </a>
-        {% endfor %}
+        {% for item in safety.priority_actions %}
+        <div class="priority-action">
+            <span class="severity-badge severity-{{ item.tone }}">{{ item.label }}</span>
+            <div class="priority-action-body">
+                <strong>{{ item.title }}</strong>
+                {% if item.detail %}<span>{{ item.detail }}</span>{% endif %}
+            </div>
+            <a href="{{ item.url }}" class="btn-secondary">{{ item.action }}</a>
         </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-shield-halved" aria-hidden="true"></i>
+            <strong>No priority actions</strong>
+            <p>All patrols and incidents are currently accounted for.</p>
+        </div>
+        {% endfor %}
     </div>
-    <script type="application/json" id="safety-analytics-data">{{ safety.analytics|tojson }}</script>
-</section>
-{% endif %}
+    <div class="panel-card">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title"><i class="fas fa-triangle-exclamation"></i> Active Security Events</h2>
+                <p class="section-subtitle">Unresolved incidents · {{ safety.last_updated }}</p>
+            </div>
+            <a href="{{ url_for('safety.incidents') }}" class="btn-action">View all</a>
+        </div>
+        {% for incident in safety.active_incidents %}
+        <div class="active-event">
+            <span class="severity-badge severity-{{ incident.priority_class }}">{{ incident.priority_label }}</span>
+            <div class="active-event-body">
+                <strong>{{ incident.title }}</strong>
+                <span>{{ incident.location }} · {{ incident.time }}</span>
+                <span>{{ incident.team or 'Unassigned' }} · {{ incident.status_phrase }}</span>
+            </div>
+            <button class="btn-primary-square" type="button"
+                data-open-modal="incident-detail-modal"
+                data-incident-code="{{ incident.code }}"
+                data-incident-title="{{ incident.title }}"
+                data-incident-location="{{ incident.location }}"
+                data-incident-status="{{ incident.status }}"
+                data-incident-status-key="{{ incident.status_key }}"
+                data-incident-status-phrase="{{ incident.status_phrase }}"
+                data-incident-team="{{ incident.team or 'Unassigned' }}"
+                data-incident-priority="{{ incident.priority_label }}"
+                data-incident-priority-class="{{ incident.priority_class }}"
+                data-incident-reported="{{ incident.reported_full }}"
+                data-incident-timeline="{{ incident.timeline|tojson|e }}">View Incident</button>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-shield-halved" aria-hidden="true"></i>
+            <strong>No active security incidents</strong>
+            <p>The campus currently has no unresolved incidents.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
 
 <div class="dashboard-grid safety-grid mb-6">
     <div class="panel-card campus-map-panel">
         <div class="section-header">
             <div>
-                <h2 class="section-title"><i class="fas fa-map-location-dot"></i> Live Campus Risk Map</h2>
+                <h2 class="section-title"><i class="fas fa-map-location-dot"></i> Campus Security Map</h2>
                 <p class="section-subtitle">{{ safety.map.name }} · Topaz cor. Sapphire St., Brgy. San Agustin, Novaliches, QC</p>
             </div>
             <span class="status-badge status-success">LIVE</span>
@@ -196,9 +171,9 @@
             <div class="campus-map-stage">
                 <div id="campus-live-map" class="campus-live-map"></div>
                 <div class="campus-map-legend">
-                    <span><i class="legend-dot legend-danger"></i> High risk</span>
-                    <span><i class="legend-dot legend-warning"></i> Moderate</span>
-                    <span><i class="legend-dot legend-success"></i> Lower</span>
+                    <span><i class="legend-dot legend-danger"></i> Active / high risk</span>
+                    <span><i class="legend-dot legend-warning"></i> Risk zone</span>
+                    <span><i class="legend-dot legend-success"></i> Checkpoint OK</span>
                     <span><i class="legend-line"></i> Patrol route</span>
                 </div>
             </div>
@@ -208,7 +183,7 @@
                     <p>{{ safety.map.address }}</p>
                     <p class="campus-map-streets"><i class="fas fa-road"></i> Topaz Street · Sapphire Street</p>
                 </div>
-                <h3 class="campus-map-list-title">Checkpoints on map</h3>
+                <h3 class="campus-map-list-title">Security checkpoints</h3>
                 <div class="campus-map-checkpoint-list">
                 {% for cp in safety.map.points %}
                     <button type="button" class="campus-map-cp" data-map-focus="{{ cp.code }}" data-lat="{{ cp.lat }}" data-lng="{{ cp.lng }}">
@@ -219,7 +194,11 @@
                         </span>
                     </button>
                 {% else %}
-                    <p class="empty-module-note">No checkpoint coordinates available.</p>
+                    <div class="empty-security-state">
+                        <i class="fas fa-location-crosshairs" aria-hidden="true"></i>
+                        <strong>No checkpoints mapped</strong>
+                        <p>Checkpoint coordinates are not available yet.</p>
+                    </div>
                 {% endfor %}
                 </div>
             </div>
@@ -248,63 +227,200 @@
         <a href="{{ url_for('safety.patrol') }}" class="btn-secondary btn-full">Open patrol planner <i class="fas fa-arrow-right"></i></a>
     </div>
 </div>
-<div class="dashboard-grid safety-grid">
+
+<div class="ops-split ops-patrol-live mb-6">
     <div class="panel-card">
         <div class="section-header">
             <div>
-                <h2 class="section-title">Recent incidents</h2>
-                <p class="section-subtitle">Synced from Incident Response</p>
+                <h2 class="section-title"><i class="fas fa-user-shield"></i> Patrol Status</h2>
+                <p class="section-subtitle">{{ safety.last_updated }}</p>
             </div>
-            <a href="{{ url_for('safety.incidents') }}" class="btn-action">View all</a>
+            <a href="{{ url_for('safety.teams') }}" class="btn-action">Teams</a>
         </div>
-        {% for incident in safety.incidents[:3] %}
+        {% for team in safety.teams[:6] %}
         <div class="safety-row">
-            <div class="incident-icon"><i class="fas fa-triangle-exclamation"></i></div>
-            <div class="safety-row-main"><strong>{{ incident.title }}</strong><span>{{ incident.code }} · {{ incident.location }}</span></div>
-            <span class="status-badge status-{{ incident.status_class }}">{{ incident.status }}</span>
+            <div class="incident-icon team-icon"><i class="fas fa-user-shield"></i></div>
+            <div class="safety-row-main">
+                <strong>{{ team.name }}</strong>
+                <span>Lead: {{ team.lead }} · {{ team.members }} members · {{ team.shift }}</span>
+            </div>
+            <span class="status-badge status-{{ team.status_class }}">
+                <span class="team-status-dot {% if team.status == 'On duty' %}active{% else %}idle{% endif %}" aria-hidden="true"></span>
+                {{ team.status }}
+            </span>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-check" aria-hidden="true"></i>
+            <strong>All patrols accounted for</strong>
+            <p>No missed checkpoints have been detected.</p>
         </div>
         {% endfor %}
     </div>
     <div class="panel-card">
         <div class="section-header">
             <div>
-                <h2 class="section-title">OSAS readiness</h2>
-                <p class="section-subtitle">From inspections, drills, and open risks</p>
+                <h2 class="section-title"><i class="fas fa-broadcast-tower"></i> Live Security Activity</h2>
+                <p class="section-subtitle">Recent system events</p>
             </div>
-            <strong class="readiness-score">{{ safety.readiness.score }}%</strong>
+            <a href="{{ url_for('safety.activity') }}" class="btn-action">Full log</a>
         </div>
-        <div class="readiness-track"><span style="width:{{ safety.readiness.score }}%"></span></div>
-        <div class="readiness-stats">
-            <div><span>Inspections</span><b>{{ safety.readiness.inspections }}</b></div>
-            <div><span>Drills</span><b>{{ safety.readiness.drills }}</b></div>
-            <div><span>Open risks</span><b>{{ safety.readiness.open_risks }}</b></div>
+        {% for item in safety.live_activity %}
+        <div class="live-activity-item">
+            <span class="live-activity-time">{{ item.time }}</span>
+            <span class="live-activity-dot" aria-hidden="true"></span>
+            <div class="live-activity-body">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.detail }}</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-bell" aria-hidden="true"></i>
+            <strong>You're all caught up</strong>
+            <p>There are no new security activity events.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% if safety.analytics %}
+<section class="command-analytics analytics-lower mb-6" aria-label="Security analytics">
+    <div class="section-header analytics-section-header">
+        <div>
+            <h2 class="section-title"><i class="fas fa-chart-pie"></i> Security Analytics</h2>
+            <p class="section-subtitle">Incident trends · patrol coverage · risk zones · inspections</p>
+        </div>
+        <a href="{{ url_for('safety.reports') }}" class="btn-action">Advanced analytics</a>
+    </div>
+
+    <div class="analytics-summary-strip">
+        <div class="analytics-summary-item">
+            <span>Incident load</span>
+            <strong>{{ safety.analytics.summary.incident_total }}</strong>
+            <small>{{ '%02d'|format(safety.analytics.summary.open_incidents) }} open · {{ safety.analytics.summary.resolved_rate }}% resolved</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Patrol coverage</span>
+            <strong>{{ safety.analytics.summary.patrol_coverage }}%</strong>
+            <small>Target 90% · avg response {{ safety.analytics.summary.avg_response }}</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Readiness</span>
+            <strong>{{ safety.analytics.summary.readiness }}%</strong>
+            <small>{{ safety.analytics.summary.actions_open }} OSAS actions open</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Risk index</span>
+            <strong>{{ safety.analytics.summary.avg_risk }}</strong>
+            <small>Checkpoint-weighted campus average</small>
         </div>
     </div>
+
+    <div class="chart-grid chart-grid-safety mb-5">
+        <div class="chart-card chart-card-span-2">
+            <div class="chart-card-header"><i class="fas fa-wave-square"></i> Are incidents increasing?</div>
+            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chart-incident-trend" aria-label="Incident volume trend chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-circle-notch"></i> Incident pipeline</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-incident-status" aria-label="Incident status distribution chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-bolt"></i> Priority mix</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-incident-priority" aria-label="Incident priority chart"></canvas></div>
+        </div>
+        <div class="chart-card chart-card-span-2">
+            <div class="chart-card-header"><i class="fas fa-route"></i> Are patrol checkpoints being completed?</div>
+            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chart-patrol-trend" aria-label="Patrol scan trend chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-gauge-high"></i> Which zones have repeated risk?</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-zone-risk" aria-label="Zone risk ranking chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-clipboard-check"></i> Inspection status</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-inspection-status" aria-label="Inspection status chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-user-shield"></i> Personnel on duty</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-team-duty" aria-label="Team duty status chart"></canvas></div>
+        </div>
+    </div>
+
+    <div class="panel-card insights-panel">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title"><i class="fas fa-lightbulb"></i> Operational insights</h2>
+                <p class="section-subtitle">What the numbers mean for campus security right now</p>
+            </div>
+        </div>
+        <div class="insights-grid">
+        {% for insight in safety.analytics.insights %}
+            <a href="{{ insight.url }}" class="insight-card insight-tone-{{ insight.tone }}">
+                <span class="insight-module-tag">{{ insight.module }}</span>
+                <p class="insight-title">{{ insight.title }}</p>
+                <p class="insight-text">{{ insight.text }}</p>
+            </a>
+        {% endfor %}
+        </div>
+    </div>
+    <script type="application/json" id="safety-analytics-data">{{ safety.analytics|tojson }}</script>
+</section>
+{% endif %}
 </div>
 
 {% elif section == 'incidents' %}
 <div class="panel-card" id="incident-queue">
     <div class="section-header">
         <div>
-            <h2 class="section-title">Incident response queue</h2>
+            <h2 class="section-title">Active Security Events</h2>
             <p class="section-subtitle">
-                Reported → Verified → Responding → Resolved → Closed
+                Severity · Location · Status · Assignment
                 {% if status_filter %} · Showing <strong>{{ status_filter|replace('_', ' ')|title }}</strong> only · <a href="{{ url_for('safety.incidents') }}">Clear filter</a>{% endif %}
             </p>
         </div>
-        <a href="{{ url_for('safety.index') }}" class="btn-action">Command Dashboard</a>
+        <a href="{{ url_for('safety.index') }}" class="btn-action">Dashboard</a>
+    </div>
+    <div class="incident-queue-row incident-queue-head" aria-hidden="true">
+        <span>Severity</span>
+        <span>Incident</span>
+        <span>Location</span>
+        <span>Reported</span>
+        <span>Assigned</span>
+        <span>Status</span>
+        <span>Actions</span>
     </div>
     {% for incident in safety.incidents %}
-    <div class="safety-row">
-        <div class="incident-icon"><i class="fas fa-triangle-exclamation"></i></div>
-        <div class="safety-row-main"><strong>{{ incident.code }} · {{ incident.title }}</strong><span>{{ incident.location }} · {{ incident.time }}{% if incident.team %} · {{ incident.team }}{% endif %}</span></div>
-        <div class="safety-row-meta">
-            <span class="status-badge status-{{ incident.status_class }}">{{ incident.status }}</span>
-            <button class="btn-action" type="button" data-open-modal="incident-detail-modal" data-incident-code="{{ incident.code }}" data-incident-title="{{ incident.title }}" data-incident-location="{{ incident.location }}" data-incident-status="{{ incident.status }}" data-incident-status-key="{{ incident.status_key }}" data-incident-team="{{ incident.team or 'Unassigned' }}">Open record</button>
+    <div class="incident-queue-row">
+        <div class="iq-severity"><span class="severity-badge severity-{{ incident.priority_class }}">{{ incident.priority_label }}</span></div>
+        <div class="iq-title safety-row-main"><strong>{{ incident.title }}</strong><span>{{ incident.code }}</span></div>
+        <div class="iq-location">{{ incident.location }}</div>
+        <div class="iq-time">{{ incident.time }}</div>
+        <div class="iq-team">{{ incident.team or 'Unassigned' }}</div>
+        <div class="iq-status"><span class="status-badge status-{{ incident.status_class }}">{{ incident.status }}</span></div>
+        <div class="iq-actions">
+            <button class="btn-action" type="button"
+                data-open-modal="incident-detail-modal"
+                data-incident-code="{{ incident.code }}"
+                data-incident-title="{{ incident.title }}"
+                data-incident-location="{{ incident.location }}"
+                data-incident-status="{{ incident.status }}"
+                data-incident-status-key="{{ incident.status_key }}"
+                data-incident-status-phrase="{{ incident.status_phrase }}"
+                data-incident-team="{{ incident.team or 'Unassigned' }}"
+                data-incident-priority="{{ incident.priority_label }}"
+                data-incident-priority-class="{{ incident.priority_class }}"
+                data-incident-reported="{{ incident.reported_full }}"
+                data-incident-timeline="{{ incident.timeline|tojson|e }}">View Incident</button>
         </div>
     </div>
     {% else %}
-    <p class="empty-module-note">No incidents in the queue.</p>
+    <div class="empty-security-state">
+        <i class="fas fa-shield-halved" aria-hidden="true"></i>
+        <strong>No active security incidents</strong>
+        <p>The campus currently has no unresolved incidents{% if status_filter %} matching this filter{% endif %}.</p>
+    </div>
     {% endfor %}
     {{ render_pagination(safety.pagination.incidents) }}
 </div>
@@ -350,6 +466,14 @@
 </div>
 
 {% elif section == 'emergency' %}
+<div class="emergency-status-banner{% if not safety.emergency_status.normal %} alert{% endif %}">
+    <h2>Current Campus Status</h2>
+    <div class="emergency-status-state">
+        <span class="sys-status-dot {% if safety.emergency_status.normal %}{% else %}tone-critical{% endif %}" aria-hidden="true"></span>
+        {{ safety.emergency_status.label }}
+    </div>
+    <p class="emergency-status-note">{{ safety.emergency_status.detail }}</p>
+</div>
 <div class="dashboard-grid safety-grid">
     <div class="panel-card" id="drill-register">
         <div class="section-header">
@@ -364,13 +488,19 @@
             <div class="safety-row-main"><strong>{{ drill.title }}</strong><span>{{ drill.schedule }}</span></div>
             <span class="status-badge status-{{ drill.status_class }}">{{ drill.status }}</span>
         </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-calendar-check" aria-hidden="true"></i>
+            <strong>No drills scheduled</strong>
+            <p>Schedule a drill to keep campus preparedness current.</p>
+        </div>
         {% endfor %}
         {{ render_pagination(safety.pagination.drills) }}
     </div>
     <div class="panel-card" id="evac-plans">
         <div class="section-header">
             <div>
-                <h2 class="section-title"><i class="fas fa-map"></i> Evacuation plans</h2>
+                <h2 class="section-title"><i class="fas fa-map"></i> Emergency Plans</h2>
                 <p class="section-subtitle">Approved map versions by building</p>
             </div>
         </div>
@@ -389,6 +519,12 @@
                     <span><i class="fas fa-location-dot"></i> {{ plan.assembly }}</span>
                 </div>
             </div>
+        {% else %}
+            <div class="empty-security-state">
+                <i class="fas fa-map" aria-hidden="true"></i>
+                <strong>No emergency plans on file</strong>
+                <p>Add an evacuation plan for each building.</p>
+            </div>
         {% endfor %}
         </div>
         {{ render_pagination(safety.pagination.plans) }}
@@ -396,72 +532,148 @@
 </div>
 
 {% elif section == 'patrol' %}
-<div class="panel-card performance-panel mb-6" id="route-performance">
-    <div class="section-header">
-        <div>
-            <h2 class="section-title">Route performance</h2>
-            <p class="section-subtitle">This week · shared with Reports · {{ safety.route.risk_reason }}</p>
-        </div>
-        <div class="patrol-header-actions">
-            <span class="status-badge status-success">{{ safety.patrol.engine }} READY</span>
-            <a href="{{ url_for('safety.teams') }}" class="btn-action">Teams</a>
-        </div>
+<div class="patrol-ops-header" id="route-performance">
+    <div>
+        <h2>Patrol Operations</h2>
+        <p class="section-subtitle" style="margin:0.35rem 0 0;">{{ safety.route.risk_reason }} · {{ safety.last_updated }}</p>
+        <p class="section-subtitle" style="margin:0.25rem 0 0;">{{ safety.route.routing_note }}</p>
     </div>
-    <div class="perf-stat-grid">
-        <div class="perf-stat">
-            <span>Coverage</span>
-            <b>{{ safety.patrol.coverage }}%</b>
-            <div class="risk-track"><span class="risk-fill risk-bg-success" style="width:{{ safety.patrol.coverage }}%"></span></div>
-        </div>
-        <div class="perf-stat">
-            <span>Completed</span>
-            <b>{{ safety.patrol.completed }} / {{ safety.patrol.planned }}</b>
-        </div>
-        <div class="perf-stat">
-            <span>Missed</span>
-            <b class="risk-danger">{{ '%02d'|format(safety.patrol.missed) }}</b>
-        </div>
-        <div class="perf-stat">
-            <span>Assigned team</span>
-            <b>{{ safety.patrol.assigned_team or 'Unassigned' }}</b>
-        </div>
+    <div class="patrol-ops-metrics">
+        <div><span>Active Routes</span><strong>{{ '%02d'|format(safety.patrol.active_routes) }}</strong></div>
+        <div><span>Coverage</span><strong>{{ safety.patrol.coverage }}%</strong></div>
+        <div><span>Completed</span><strong>{{ safety.patrol.completed }} / {{ safety.patrol.planned }}</strong></div>
+        <div><span>Missed</span><strong class="risk-danger">{{ '%02d'|format(safety.patrol.missed) }}</strong></div>
     </div>
 </div>
-<div class="panel-card route-board" id="route-board">
+
+{% if safety.risk_demo %}
+<section class="risk-demo-panel panel-card mb-6" aria-label="Predictive patrol risk model">
     <div class="section-header">
         <div>
-            <h2 class="section-title">Recommended checkpoint sequence</h2>
-            <p class="section-subtitle">Optimized from highest checkpoint risk first</p>
+            <h2 class="section-title"><i class="fas fa-diagram-project"></i> Predictive Patrol Model</h2>
+            <p class="section-subtitle">{{ safety.risk_demo.model.type }} — not a trained machine-learning model</p>
         </div>
-        <span class="status-badge status-success">{{ safety.patrol.duration|upper }} · {{ safety.patrol.distance|upper }}</span>
+        <span class="status-badge status-info">HEURISTIC</span>
     </div>
-    <div class="route-board-grid">
-        <div>
-            <ol class="route-sequence">
-            {% for stop in safety.patrol.sequence %}
+    <ol class="risk-pipeline" aria-label="Risk to route pipeline">
+        {% for step in safety.risk_demo.pipeline %}
+        <li>{{ step }}</li>
+        {% endfor %}
+    </ol>
+    <div class="risk-demo-grid">
+        <div class="risk-demo-card">
+            <h3>Severity weights</h3>
+            <ul class="risk-weight-list">
+            {% for w in safety.risk_demo.model.severity_weights %}
+                <li><span>{{ w.label }}</span><strong>{{ w.value }}</strong></li>
+            {% endfor %}
+            </ul>
+            <p class="risk-demo-note">Recency half-life: {{ safety.risk_demo.model.half_life_days }} days · Window: {{ safety.risk_demo.model.window_days }} days · Missed patrol weight: {{ safety.risk_demo.model.missed_patrol_weight }}</p>
+        </div>
+        <div class="risk-demo-card">
+            <h3>{{ safety.risk_demo.sample.title }}</h3>
+            <ol class="risk-sample-steps">
+            {% for step in safety.risk_demo.sample.steps %}
                 <li>
-                    <b>{{ stop.label }}</b>
-                    <div class="route-stop-main">
-                        <strong>{{ stop.name }}</strong>
-                        {% if stop.risk is not none %}
-                        <span class="risk-pill risk-{{ stop.tone }}">Risk {{ stop.risk }}</span>
-                        {% endif %}
-                    </div>
+                    <strong>{{ step.label }}</strong>
+                    <span>{{ step.detail }}</span>
                 </li>
             {% endfor %}
             </ol>
-            {{ render_pagination(safety.pagination.sequence) }}
+            <p class="risk-demo-score">Resulting score: <strong>{{ safety.risk_demo.sample.score }}</strong></p>
+            <p class="risk-demo-note">{{ safety.risk_demo.sample.note }}</p>
         </div>
-        <div class="route-side-card">
-            <h3>Why this order</h3>
-            <p>{{ safety.route.risk_reason }}</p>
-            <div class="route-summary">
-                <div><span>Engine</span><strong>{{ safety.patrol.engine }}</strong></div>
-                <div><span>Stops</span><strong>{{ safety.route.checkpoints }}</strong></div>
-                <div><span>Team</span><strong>{{ safety.patrol.assigned_team or '—' }}</strong></div>
+        <div class="risk-demo-card">
+            <h3>Live top checkpoint{% if safety.risk_demo.top_checkpoint %} · {{ safety.risk_demo.top_checkpoint.code }}{% endif %}</h3>
+            {% if safety.risk_demo.top_checkpoint %}
+            <p class="risk-demo-score">{{ safety.risk_demo.top_checkpoint.name }} · Score <strong>{{ safety.risk_demo.top_checkpoint.score }}</strong></p>
+            {% if safety.risk_demo.top_checkpoint.contributions %}
+            <ul class="risk-contrib-list">
+            {% for c in safety.risk_demo.top_checkpoint.contributions %}
+                <li>
+                    <span class="severity-badge severity-{% if c.kind == 'patrol_exception' %}medium{% else %}{{ c.priority|lower }}{% endif %}">{{ c.priority }}</span>
+                    <div>
+                        <strong>{{ c.label }}</strong>
+                        <span>{{ c.severity_weight }} x decay {{ c.decay }} ({{ c.days_ago }}d) = {{ c.contribution }}</span>
+                    </div>
+                </li>
+            {% endfor %}
+            </ul>
+            {% else %}
+            <p class="risk-demo-note">No open incidents or patrol exceptions in the scoring window — baseline score applied.</p>
+            {% endif %}
+            {% else %}
+            <p class="risk-demo-note">No checkpoints available for live breakdown.</p>
+            {% endif %}
+        </div>
+    </div>
+    <p class="risk-demo-blurb">{{ safety.risk_demo.model.defense_blurb }}</p>
+</section>
+{% endif %}
+
+<div class="dashboard-grid safety-grid mb-6">
+    <div class="panel-card route-board" id="route-board">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title">Recommended checkpoint sequence</h2>
+                <p class="section-subtitle">Incident data → risk score → priority checkpoints → patrol route</p>
             </div>
-            <button class="btn-secondary btn-full" type="button" data-open-modal="patrol-modal"><i class="fas fa-wand-magic-sparkles"></i> Regenerate route</button>
+            <span class="status-badge status-success">{{ safety.patrol.duration|upper }} · {{ safety.patrol.distance|upper }}</span>
         </div>
+        <div class="route-board-grid">
+            <div>
+                <ol class="route-sequence">
+                {% for stop in safety.patrol.sequence %}
+                    <li>
+                        <b>{{ stop.label }}</b>
+                        <div class="route-stop-main">
+                            <strong>{{ stop.name }}</strong>
+                            {% if stop.risk is not none %}
+                            <span class="risk-pill risk-{{ stop.tone }}">Risk {{ stop.risk }}</span>
+                            {% endif %}
+                        </div>
+                    </li>
+                {% endfor %}
+                </ol>
+                {{ render_pagination(safety.pagination.sequence) }}
+            </div>
+            <div class="route-side-card">
+                <h3>Why this order</h3>
+                <p>{{ safety.route.risk_reason }}</p>
+                <p class="risk-demo-note">{{ safety.route.routing_note }}</p>
+                <div class="route-summary">
+                    <div><span>Engine</span><strong>{{ safety.patrol.engine }}</strong></div>
+                    <div><span>Stops</span><strong>{{ safety.route.checkpoints }}</strong></div>
+                    <div><span>Team</span><strong>{{ safety.patrol.assigned_team or '—' }}</strong></div>
+                </div>
+                <button class="btn-secondary btn-full" type="button" data-open-modal="patrol-modal"><i class="fas fa-wand-magic-sparkles"></i> Regenerate route</button>
+            </div>
+        </div>
+    </div>
+    <div class="panel-card">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title"><i class="fas fa-users"></i> Active Teams</h2>
+                <p class="section-subtitle">Team → assigned route → checkpoint → scan → status</p>
+            </div>
+            <button class="btn-action" type="button" data-open-modal="team-modal">Assign Route</button>
+        </div>
+        {% for team in safety.teams_options[:8] %}
+        <div class="safety-row">
+            <div class="incident-icon team-icon"><i class="fas fa-user-shield"></i></div>
+            <div class="safety-row-main"><strong>{{ team.name }}</strong><span>{{ team.lead }} · {{ team.members }} members</span></div>
+            <span class="status-badge status-{{ team.status_class }}">
+                <span class="team-status-dot {% if team.status == 'On duty' %}active{% else %}idle{% endif %}" aria-hidden="true"></span>
+                {{ team.status }}
+            </span>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-check" aria-hidden="true"></i>
+            <strong>All patrols accounted for</strong>
+            <p>No missed checkpoints have been detected.</p>
+        </div>
+        {% endfor %}
     </div>
 </div>
 
@@ -471,7 +683,7 @@
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-users"></i> Patrol teams</h2>
-                <p class="section-subtitle">Used by patrol route generation</p>
+                <p class="section-subtitle">Used by patrol route generation · {{ safety.last_updated }}</p>
             </div>
             <a href="{{ url_for('safety.patrol') }}" class="btn-action">Plan route</a>
         </div>
@@ -479,7 +691,16 @@
         <div class="safety-row">
             <div class="incident-icon team-icon"><i class="fas fa-user-shield"></i></div>
             <div class="safety-row-main"><strong>{{ team.name }}</strong><span>Lead: {{ team.lead }} · {{ team.members }} members · {{ team.shift }}</span></div>
-            <span class="status-badge status-{{ team.status_class }}">{{ team.status }}</span>
+            <span class="status-badge status-{{ team.status_class }}">
+                <span class="team-status-dot {% if team.status == 'On duty' %}active{% else %}idle{% endif %}" aria-hidden="true"></span>
+                {{ team.status }}
+            </span>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-users" aria-hidden="true"></i>
+            <strong>No patrol teams yet</strong>
+            <p>Add a team to begin route assignments.</p>
         </div>
         {% endfor %}
         {{ render_pagination(safety.pagination.teams) }}
@@ -487,34 +708,78 @@
     <div class="panel-card" id="checkpoints-panel">
         <div class="section-header">
             <div>
-                <h2 class="section-title"><i class="fas fa-location-crosshairs"></i> Checkpoints</h2>
-                <p class="section-subtitle">QR/NFC/GPS registry · drives risk map</p>
+                <h2 class="section-title"><i class="fas fa-location-crosshairs"></i> Security Checkpoints</h2>
+                <p class="section-subtitle">QR/NFC/GPS registry · scan history</p>
             </div>
         </div>
-        <div class="entity-list">
         {% for cp in safety.checkpoints %}
-            <div class="entity-card">
-                <div class="entity-card-top">
-                    <div class="entity-main">
-                        <strong>{{ cp.code }} · {{ cp.name }}</strong>
-                    <span>{{ cp.method }} active · {{ cp.official_risk }} risk · {{ cp.patrol_frequency }} · Last scan {{ cp.last_scan }}</span>
+            <div class="checkpoint-card">
+                <div class="checkpoint-card-top">
+                    <div>
+                        <p class="checkpoint-code">Checkpoint {{ cp.code }}</p>
+                        <p class="checkpoint-name">{{ cp.name }}</p>
                     </div>
-                    <span class="risk-pill risk-{{ cp.tone }}">Risk {{ cp.risk }}</span>
+                    <span class="status-badge status-success">Active</span>
                 </div>
+                <div class="checkpoint-meta-grid">
+                    <div>
+                        <span>Last Scan</span>
+                        <strong>{{ cp.last_scan }}</strong>
+                    </div>
+                    <div>
+                        <span>Patrol Status</span>
+                        <strong>{% if cp.patrol_status_ok %}✓ {% endif %}{{ cp.patrol_status }}</strong>
+                    </div>
+                    <div>
+                        <span>Method</span>
+                        <strong>{{ cp.method }}</strong>
+                    </div>
+                    <div>
+                        <span>Risk Level</span>
+                        <strong class="risk-{{ cp.tone }}">{{ cp.risk_level }}</strong>
+                    </div>
+                </div>
+                {% if cp.history %}
+                <ul class="checkpoint-history" aria-label="Checkpoint scan history">
+                    {% for h in cp.history %}
+                    <li>
+                        <span>{{ h.time }}</span>
+                        <span class="{% if h.ok %}ok{% else %}warn{% endif %}">{% if h.ok %}✓{% else %}⚠{% endif %} {{ h.label }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        {% else %}
+            <div class="empty-security-state">
+                <i class="fas fa-location-crosshairs" aria-hidden="true"></i>
+                <strong>No checkpoints registered</strong>
+                <p>Add checkpoints to enable patrol scanning.</p>
             </div>
         {% endfor %}
-        </div>
         {{ render_pagination(safety.pagination.checkpoints) }}
     </div>
 </div>
 
 {% elif section == 'visitors' %}
 <div class="dashboard-grid safety-grid">
-    <div class="panel-card"><div class="section-header"><div><h2 class="section-title"><i class="fas fa-id-card"></i> Visitor pass register</h2><p class="section-subtitle">Time-bound QR passes with entry and exit audit trail.</p></div></div>
-        {% for visitor in safety.visitors %}<div class="safety-row"><div class="incident-icon team-icon"><i class="fas fa-user"></i></div><div class="safety-row-main"><strong>{{ visitor.full_name }}</strong><span>{{ visitor.pass_code }} · Host: {{ visitor.host_name }} · {{ visitor.purpose }}</span></div><span class="status-badge status-success">{{ visitor.status|replace('_', ' ')|title }}</span></div>{% else %}<p class="empty-module-note">No visitor passes registered yet.</p>{% endfor %}
+    <div class="panel-card"><div class="section-header"><div><h2 class="section-title"><i class="fas fa-id-card"></i> Visitor pass register</h2><p class="section-subtitle">Registration → pass code → validation → check-in → check-out</p></div></div>
+        {% for visitor in safety.visitors %}
+        <div class="safety-row">
+            <div class="incident-icon team-icon"><i class="fas fa-user"></i></div>
+            <div class="safety-row-main"><strong>{{ visitor.full_name }}</strong><span>{{ visitor.pass_code }} · Host: {{ visitor.host_name }} · {{ visitor.purpose }}</span></div>
+            <span class="status-badge status-{% if visitor.status == 'checked_in' %}success{% elif visitor.status == 'registered' %}info{% elif visitor.status in ['expired', 'revoked'] %}danger{% else %}warning{% endif %}">{{ visitor.status|replace('_', ' ')|title }}</span>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-id-card" aria-hidden="true"></i>
+            <strong>No visitor passes registered yet</strong>
+            <p>Issue a time-bound QR pass to begin gate accountability.</p>
+        </div>
+        {% endfor %}
         {{ render_pagination(safety.pagination.visitors) }}
     </div>
-    <div class="panel-card"><div class="section-header"><div><h2 class="section-title"><i class="fas fa-shield-halved"></i> Gate verification</h2><p class="section-subtitle">Verify a pass on entry, then close the visit on exit.</p></div></div><div class="entity-list"><div class="entity-row"><div class="entity-main"><strong>QR pass lifecycle</strong><span>Registered → Checked in → Exited</span></div><span class="status-badge status-success">AUDITABLE</span></div><div class="entity-row"><div class="entity-main"><strong>Pass validity</strong><span>Automatically expires after the visit date</span></div><i class="fas fa-clock"></i></div></div></div>
+    <div class="panel-card"><div class="section-header"><div><h2 class="section-title"><i class="fas fa-shield-halved"></i> Gate verification</h2><p class="section-subtitle">Supported statuses: registered · checked in · exited · expired · revoked</p></div></div><div class="entity-list"><div class="entity-row"><div class="entity-main"><strong>QR pass lifecycle</strong><span>Registered → Checked in → Exited</span></div><span class="status-badge status-success">AUDITABLE</span></div><div class="entity-row"><div class="entity-main"><strong>Pass validity</strong><span>Automatically expires after the visit date</span></div><i class="fas fa-clock"></i></div></div></div>
 </div>
 
 {% elif section == 'reports' %}
@@ -566,9 +831,11 @@
     <div class="section-header">
         <div>
             <h2 class="section-title"><i class="fas fa-list-check"></i> System activity</h2>
-            <p class="section-subtitle">Written by every module action</p>
+            <p class="section-subtitle">Read-only accountability record · written by every module action</p>
         </div>
+        <span class="status-badge status-info">READ-ONLY</span>
     </div>
+    <p class="risk-demo-note" style="margin-bottom:1rem;">Audit entries capture who performed an action, on which record, and when. This log cannot be edited from the UI.</p>
     <div class="entity-list activity-feed">
     {% for item in safety.activity %}
         <div class="entity-row">
@@ -577,6 +844,12 @@
                 <strong>{{ item.title }}</strong>
                 <span>{{ item.detail }}{% if item.module %} · {{ item.module|capitalize }}{% endif %}</span>
             </div>
+        </div>
+    {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-list-check" aria-hidden="true"></i>
+            <strong>No audit events yet</strong>
+            <p>Module actions will appear here as a read-only trail.</p>
         </div>
     {% endfor %}
     </div>
@@ -629,11 +902,11 @@
     </div>
 </div>
 
-<div id="scan-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Predictive Patrol Planning</span><h2>Scan checkpoint</h2><p class="modal-subtitle">QR / NFC / GPS / manual guard check-in</p><form method="POST" action="{{ url_for('safety.scan_checkpoint') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Scan token or checkpoint code<input name="scan_token" required placeholder="e.g. G2 or tok-…" list="checkpoint-scan-options"></label><datalist id="checkpoint-scan-options">{% for cp in safety.all_checkpoints %}<option value="{{ cp.code }}">{{ cp.name }}</option><option value="{{ cp.scan_token }}">{{ cp.code }} token</option>{% endfor %}</datalist><label>Method<select name="scan_method"><option value="qr">QR</option><option value="nfc">NFC</option><option value="gps">GPS</option><option value="manual">Manual</option></select></label><label>Notes<input name="notes" placeholder="Optional notes"></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Record Scan</button></div></form></div></div>
+<div id="scan-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Predictive Patrol Planning</span><h2>Scan checkpoint</h2><p class="modal-subtitle">Enter a QR token or checkpoint code. Method tags how the scan was recorded (QR / NFC tag / GPS / manual) — this screen uses manual token entry, not hardware NFC tap.</p><form method="POST" action="{{ url_for('safety.scan_checkpoint') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Scan token or checkpoint code<input name="scan_token" required placeholder="e.g. G2 or tok-…" list="checkpoint-scan-options"></label><datalist id="checkpoint-scan-options">{% for cp in safety.all_checkpoints %}<option value="{{ cp.code }}">{{ cp.name }}</option><option value="{{ cp.scan_token }}">{{ cp.code }} token</option>{% endfor %}</datalist><label>Recorded method<select name="scan_method"><option value="qr">QR (token / code)</option><option value="nfc">NFC (logged method tag)</option><option value="gps">GPS (logged method tag)</option><option value="manual">Manual check-in</option></select></label><label>Notes<input name="notes" placeholder="Optional notes"></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Record Scan</button></div></form></div></div>
 <div id="attach-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Attach incident file</h2><form method="POST" action="{{ url_for('safety.attach_incident_file') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident code<input name="code" required placeholder="e.g. INC-24091" list="incident-code-options"></label><datalist id="incident-code-options">{% for incident in safety.incidents %}<option value="{{ incident.code }}"></option>{% endfor %}</datalist><label>Photo / document<input type="file" name="attachment" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Upload</button></div></form></div></div>
 <div id="notify-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Notify parent / guardian</h2><form method="POST" action="{{ url_for('safety.notify_parent') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident code<input name="code" required list="incident-code-options-notify"></label><datalist id="incident-code-options-notify">{% for incident in safety.incidents %}<option value="{{ incident.code }}"></option>{% endfor %}</datalist><label>Recipient name<input name="recipient_name" required></label><label>Channel<select name="channel"><option value="email">Email</option><option value="sms">SMS</option><option value="push">Push</option></select></label><label>Email<input name="email" type="email"></label><label>Phone<input name="phone"></label><label>Message<textarea name="message" rows="3" required placeholder="Notification message"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Queue Notification</button></div></form></div></div>
 <div id="incident-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Report a campus incident</h2><form method="POST" action="{{ url_for('safety.log_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident title<input name="title" required placeholder="e.g. Suspicious activity"></label><label>Location<input name="location" required placeholder="Building, floor, gate, or checkpoint"></label><label>Priority<select name="priority"><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option><option value="low">Low</option></select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Create Incident</button></div></form></div></div>
-<div id="incident-detail-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2 id="incident-detail-title">Incident record</h2><p class="modal-subtitle" id="incident-detail-subtitle">Select a record to update</p><form method="POST" action="{{ url_for('safety.update_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="code" id="incident-detail-code"><label>Status<select name="status" id="incident-detail-status"><option value="reported">Reported</option><option value="verified">Verified</option><option value="responding">Responding</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select></label><label>Response notes<textarea name="notes" rows="3" placeholder="Action taken or handover notes"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Update</button></div></form></div></div>
+<div id="incident-detail-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog modal-dialog-wide"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2 id="incident-detail-title">Incident record</h2><div class="incident-detail-hero"><div><span id="incident-detail-priority" class="severity-badge severity-medium">Medium</span></div><p class="modal-subtitle" id="incident-detail-subtitle" style="margin:0.5rem 0 0;">Select a record to update</p></div><div class="incident-detail-grid"><div class="incident-detail-field"><label>Location</label><p id="incident-detail-location">—</p></div><div class="incident-detail-field"><label>Reported</label><p id="incident-detail-reported">—</p></div><div class="incident-detail-field"><label>Status</label><p id="incident-detail-status-phrase">—</p></div><div class="incident-detail-field"><label>Assigned Team</label><p id="incident-detail-team">—</p></div></div><h3 class="section-title" style="margin-bottom:0.75rem;">Incident Timeline</h3><ul class="incident-timeline" id="incident-detail-timeline"></ul><form method="POST" action="{{ url_for('safety.update_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="code" id="incident-detail-code"><label>Status<select name="status" id="incident-detail-status"><option value="reported">Reported</option><option value="verified">Verified</option><option value="responding">Responding</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select></label><label>Response notes<textarea name="notes" rows="3" placeholder="Action taken or handover notes"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Update</button></div></form></div></div>
 <div id="inspection-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Inspections and Risks</span><h2>Schedule safety inspection</h2><form method="POST" action="{{ url_for('safety.create_inspection') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Zone<input name="zone" required placeholder="e.g. Science Building" list="zone-options"></label><datalist id="zone-options">{% for cp in safety.checkpoints %}<option value="{{ cp.name }}"></option>{% endfor %}</datalist><label>Inspection type<select name="type"><option>Fire safety</option><option>Access control</option><option>First aid and supplies</option><option>General safety</option></select></label><label>Scheduled date<input type="date" name="date" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Inspection</button></div></form></div></div>
 <div id="drill-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Emergency Plans and Drills</span><h2>Schedule emergency drill</h2><form method="POST" action="{{ url_for('safety.create_drill') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Drill title<input name="title" required placeholder="e.g. Fire evacuation drill"></label><label>Type<select name="type"><option>Fire</option><option>Earthquake</option><option>Lockdown</option><option>Medical</option></select></label><label>Schedule<input type="datetime-local" name="scheduled_at" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Drill</button></div></form></div></div>
 <div id="plan-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Emergency Plans and Drills</span><h2>Add evacuation plan</h2><form method="POST" action="{{ url_for('safety.create_plan') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Building<input name="building" required></label><label>Floor or area<input name="floor" required></label><label>Assembly zone<input name="assembly_zone" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Plan</button></div></form></div></div>
@@ -656,12 +929,45 @@ document.addEventListener('click', function (event) {
     var subtitle = document.getElementById('incident-detail-subtitle');
     var code = document.getElementById('incident-detail-code');
     var status = document.getElementById('incident-detail-status');
+    var priority = document.getElementById('incident-detail-priority');
+    var location = document.getElementById('incident-detail-location');
+    var reported = document.getElementById('incident-detail-reported');
+    var statusPhrase = document.getElementById('incident-detail-status-phrase');
+    var team = document.getElementById('incident-detail-team');
+    var timeline = document.getElementById('incident-detail-timeline');
     if (title) title.textContent = trigger.dataset.incidentCode + ' · ' + trigger.dataset.incidentTitle;
-    if (subtitle) subtitle.textContent = trigger.dataset.incidentLocation + ' · Assigned to ' + (trigger.dataset.incidentTeam || 'Unassigned');
+    if (subtitle) subtitle.textContent = trigger.dataset.incidentTitle || '';
     if (code) code.value = trigger.dataset.incidentCode;
+    if (location) location.textContent = trigger.dataset.incidentLocation || '—';
+    if (reported) reported.textContent = trigger.dataset.incidentReported || trigger.dataset.incidentStatus || '—';
+    if (statusPhrase) statusPhrase.textContent = trigger.dataset.incidentStatusPhrase || trigger.dataset.incidentStatus || '—';
+    if (team) team.textContent = trigger.dataset.incidentTeam || 'Unassigned';
+    if (priority) {
+      var pClass = trigger.dataset.incidentPriorityClass || 'medium';
+      priority.className = 'severity-badge severity-' + pClass;
+      priority.textContent = trigger.dataset.incidentPriority || 'Medium';
+    }
     if (status && trigger.dataset.incidentStatus) {
       var key = (trigger.dataset.incidentStatusKey || trigger.dataset.incidentStatus || '').toLowerCase();
       status.value = key;
+    }
+    if (timeline) {
+      timeline.innerHTML = '';
+      var events = [];
+      try { events = JSON.parse(trigger.dataset.incidentTimeline || '[]'); } catch (e) { events = []; }
+      if (!events.length) {
+        events = [{ time: trigger.dataset.incidentReported || '', text: 'Incident reported' }];
+      }
+      events.forEach(function (ev) {
+        var li = document.createElement('li');
+        var time = document.createElement('time');
+        time.textContent = ev.time || '';
+        var span = document.createElement('span');
+        span.textContent = ev.text || '';
+        li.appendChild(time);
+        li.appendChild(span);
+        timeline.appendChild(li);
+      });
     }
   }
   var reportBtn = event.target.closest('[data-report-type]');

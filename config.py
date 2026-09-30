@@ -8,6 +8,7 @@ load_dotenv()
 
 class Config:
     FLASK_ENV = os.getenv("FLASK_ENV", "development")
+    DEBUG = os.getenv("FLASK_DEBUG", "0" if FLASK_ENV == "production" else "1").lower() in ("1", "true", "yes")
 
     SECRET_KEY = os.getenv("SECRET_KEY")
     if not SECRET_KEY:
@@ -20,6 +21,14 @@ class Config:
     LOGIN_LOCKOUT_MINUTES = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "5"))
     WTF_CSRF_TIME_LIMIT = None
 
+    # Session cookie hardening
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = os.getenv("SESSION_COOKIE_SAMESITE", "Lax")
+    SESSION_COOKIE_SECURE = FLASK_ENV == "production" or os.getenv("SESSION_COOKIE_SECURE", "0").lower() in ("1", "true", "yes")
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = SESSION_COOKIE_SAMESITE
+    REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
+
     MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
     MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
     MYSQL_USER = os.getenv("MYSQL_USER", "root")
@@ -28,6 +37,14 @@ class Config:
 
     MAX_PROFILE_IMAGE_MB = int(os.getenv("MAX_PROFILE_IMAGE_MB", "2"))
     MAX_ATTACHMENT_MB = int(os.getenv("MAX_ATTACHMENT_MB", "5"))
+    ALLOWED_ATTACHMENT_EXTENSIONS = {
+        e.strip().lower().lstrip(".")
+        for e in os.getenv(
+            "ALLOWED_ATTACHMENT_EXTENSIONS",
+            "pdf,png,jpg,jpeg,gif,webp,doc,docx,txt,csv,xlsx",
+        ).split(",")
+        if e.strip()
+    }
 
     # Self-hosted OSRM (Table/Route/Trip). Falls back to local heuristic if unreachable.
     OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "http://127.0.0.1:5001").rstrip("/")
@@ -55,3 +72,6 @@ class Config:
 
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "static/uploads")
     EXPORT_FOLDER = os.getenv("EXPORT_FOLDER", "static/exports")
+
+    # Demo credentials are for local/dev only — never present as production secrets
+    SHOW_DEMO_CREDENTIALS = FLASK_ENV != "production" and os.getenv("SHOW_DEMO_CREDENTIALS", "1").lower() in ("1", "true", "yes")

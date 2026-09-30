@@ -6,15 +6,14 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 from models.database import execute, query_one
-from models.user import User
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
 
 def get_profile(user_id):
     return query_one(
-        """SELECT id, username, email, full_name, role, library_id, barcode,
-                  card_status, card_expiry, account_status, profile_image, created_at
+        """SELECT id, username, email, full_name, role, campus_id,
+                  account_status, profile_image, must_change_password, created_at
            FROM users WHERE id = %s""",
         (user_id,),
     )

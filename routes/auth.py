@@ -80,6 +80,7 @@ def login():
         "login.html",
         error=error,
         login_bg_url=_login_bg_url(),
+        show_demo_credentials=bool(current_app.config.get("SHOW_DEMO_CREDENTIALS")),
     )
 
 
