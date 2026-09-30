@@ -40,7 +40,6 @@ def _connect_kwargs(database: str | None = None) -> dict:
 
 
 def ensure_database(name: str) -> None:
-    # Identifiers cannot be parameterized; name comes from our env only.
     safe = "".join(c for c in name if c.isalnum() or c in ("_",))
     if safe != name or not safe:
         raise SystemExit(f"Refusing unsafe database name: {name!r}")
@@ -94,61 +93,92 @@ def apply_schema(database: str) -> None:
         conn.close()
 
 
-def seed(database: str) -> None:
-    os.environ.setdefault("MYSQL_DATABASE", database)
+def _seed_users(database: str) -> None:
     from werkzeug.security import generate_password_hash
-    from app import app
-    from models.database import execute
-    from services.safety_service import ensure_campus_seed
 
+    rows = [
+        (
+            "admin",
+            generate_password_hash("password123"),
+            "admin@bcp.edu.ph",
+            "OSAS Administrator",
+            "admin",
+            "OSAS-0001",
+        ),
+        (
+            "security.head",
+            generate_password_hash("password123"),
+            "security@bcp.edu.ph",
+            "Security Head",
+            "security_head",
+            "OSAS-0002",
+        ),
+    ]
+    conn = connect(**_connect_kwargs(database))
+    try:
+        cur = conn.cursor()
+        for row in rows:
+            cur.execute(
+                """INSERT IGNORE INTO users
+                   (username,password_hash,email,full_name,role,campus_id)
+                   VALUES (%s,%s,%s,%s,%s,%s)""",
+                row,
+            )
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+
+def seed_campus(app) -> None:
     with app.app_context():
-        execute(
-            """INSERT IGNORE INTO users (username,password_hash,email,full_name,role,campus_id)
-               VALUES (%s,%s,%s,%s,%s,%s)""",
-            (
-                "admin",
-                generate_password_hash("password123"),
-                "admin@bcp.edu.ph",
-                "OSAS Administrator",
-                "admin",
-                "OSAS-0001",
-            ),
-        )
-        execute(
-            """INSERT IGNORE INTO users (username,password_hash,email,full_name,role,campus_id)
-               VALUES (%s,%s,%s,%s,%s,%s)""",
-            (
-                "security.head",
-                generate_password_hash("password123"),
-                "security@bcp.edu.ph",
-                "Security Head",
-                "security_head",
-                "OSAS-0002",
-            ),
-        )
+        from services.safety_service import ensure_campus_seed
+
         ensure_campus_seed()
 
 
-def main() -> None:
+def bootstrap_with_app(app=None) -> dict:
+    """Create schema/seed if needed. Returns a small status dict for health/logs."""
     database = Config.MYSQL_DATABASE or "osas_bcp"
+    status = {
+        "database": database,
+        "host": Config.MYSQL_HOST,
+        "port": Config.MYSQL_PORT,
+        "schema_applied": False,
+        "seeded": False,
+    }
+    if not SCHEMA.exists():
+        raise FileNotFoundError(f"Missing {SCHEMA}")
+
     print(
         f"Bootstrap: {Config.MYSQL_USER}@{Config.MYSQL_HOST}:{Config.MYSQL_PORT}/{database} "
         f"(ssl={Config.MYSQL_SSL})"
     )
-    if not SCHEMA.exists():
-        raise SystemExit(f"Missing {SCHEMA}")
-
     ensure_database(database)
-    if table_exists(database, "users"):
-        print("Schema already present — skipping create.")
-    else:
+    if not table_exists(database, "users"):
         print("Applying schema.sql ...")
         apply_schema(database)
+        status["schema_applied"] = True
         print("Schema applied.")
+    else:
+        print("Schema already present — skipping create.")
 
     print("Seeding demo users / campus (INSERT IGNORE) ...")
-    seed(database)
+    _seed_users(database)
+    status["seeded"] = True
+    if app is not None:
+        seed_campus(app)
     print("Bootstrap complete.")
+    return status
+
+
+def main() -> None:
+    # Avoid importing app until after schema exists (fresh deploys).
+    bootstrap_with_app(app=None)
+    from app import app
+
+    seed_campus(app)
+    print("Campus seed complete.")
 
 
 if __name__ == "__main__":

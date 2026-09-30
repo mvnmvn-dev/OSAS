@@ -9,7 +9,27 @@ api_bp = Blueprint("api", __name__, url_prefix="/api")
 
 @api_bp.get("/health")
 def health():
-    return api_response({"service": "osas", "status": "healthy"})
+    from flask import current_app
+    from models.database import query_one
+
+    db = {
+        "ok": False,
+        "host": current_app.config.get("MYSQL_HOST"),
+        "database": current_app.config.get("MYSQL_DATABASE"),
+    }
+    try:
+        query_one("SELECT 1 AS ok")
+        db["ok"] = True
+        try:
+            row = query_one("SELECT COUNT(*) AS c FROM users")
+            db["users"] = int(row["c"] if row else 0)
+        except Exception as exc:
+            db["users_error"] = str(exc)[:180]
+    except Exception as exc:
+        db["error"] = str(exc)[:180]
+
+    status = "healthy" if db.get("ok") and "users_error" not in db else "degraded"
+    return api_response({"service": "osas", "status": status, "db": db})
 
 
 @api_bp.get("/campus/map")

@@ -55,26 +55,33 @@ def login():
     if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        user = User.get_by_username(username)
+        try:
+            user = User.get_by_username(username)
 
-        if user and is_account_locked(user):
-            error = "Account temporarily locked due to failed login attempts. Try again later."
-        elif user and user.account_status != "active":
-            error = "This account has been disabled. Contact the OSAS administrator."
-            record_failed_login(username, user.id)
-        elif user and user.check_password(password):
-            clear_login_attempts(user.id)
-            session.permanent = True
-            login_user(user)
-            if user.must_change_password:
-                return redirect(url_for("auth.change_password"))
-            next_page = request.args.get("next")
-            if next_page and is_safe_redirect(next_page, request.host_url):
-                return redirect(next_page)
-            return redirect(url_for("dashboard.index"))
-        else:
-            record_failed_login(username, user.id if user else None)
-            error = "Invalid username or password."
+            if user and is_account_locked(user):
+                error = "Account temporarily locked due to failed login attempts. Try again later."
+            elif user and user.account_status != "active":
+                error = "This account has been disabled. Contact the OSAS administrator."
+                record_failed_login(username, user.id)
+            elif user and user.check_password(password):
+                clear_login_attempts(user.id)
+                session.permanent = True
+                login_user(user)
+                if user.must_change_password:
+                    return redirect(url_for("auth.change_password"))
+                next_page = request.args.get("next")
+                if next_page and is_safe_redirect(next_page, request.host_url):
+                    return redirect(next_page)
+                return redirect(url_for("dashboard.index"))
+            else:
+                record_failed_login(username, user.id if user else None)
+                error = "Invalid username or password."
+        except Exception:
+            current_app.logger.exception("Login failed due to database error")
+            error = (
+                "Database unavailable. On Railway, set web MYSQL_HOST / MYSQL_PASSWORD "
+                "from the MySQL service (private network), then redeploy."
+            )
 
     return render_template(
         "login.html",

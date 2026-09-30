@@ -55,6 +55,20 @@ class Config:
     MYSQL_DATABASE = os.getenv("MYSQL_DATABASE") or os.getenv("MYSQLDATABASE") or _url_cfg.get("database", "osas_bcp")
     MYSQL_SSL = os.getenv("MYSQL_SSL", "0").lower() in ("1", "true", "yes")
 
+    # Railway injects MYSQLHOST* when MySQL is linked. If web still has local defaults, use them.
+    if FLASK_ENV == "production":
+        _rh = os.getenv("MYSQLHOST")
+        if _rh and MYSQL_HOST in ("localhost", "127.0.0.1"):
+            MYSQL_HOST = _rh
+            if os.getenv("MYSQLPORT"):
+                MYSQL_PORT = int(os.getenv("MYSQLPORT"))
+            if os.getenv("MYSQLUSER"):
+                MYSQL_USER = os.getenv("MYSQLUSER")
+            if os.getenv("MYSQLPASSWORD"):
+                MYSQL_PASSWORD = os.getenv("MYSQLPASSWORD")
+            if not os.getenv("MYSQL_DATABASE") and os.getenv("MYSQLDATABASE"):
+                MYSQL_DATABASE = os.getenv("MYSQLDATABASE")
+
     MAX_PROFILE_IMAGE_MB = int(os.getenv("MAX_PROFILE_IMAGE_MB", "2"))
     MAX_ATTACHMENT_MB = int(os.getenv("MAX_ATTACHMENT_MB", "5"))
     ALLOWED_ATTACHMENT_EXTENSIONS = {
