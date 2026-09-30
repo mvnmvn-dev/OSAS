@@ -46,14 +46,14 @@ class Config:
     REMEMBER_COOKIE_SAMESITE = SESSION_COOKIE_SAMESITE
     REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
 
-    # Prefer discrete MYSQL_* vars; fall back to MYSQL_URL / DATABASE_URL (common on hosts)
-    _url_cfg = _parse_mysql_url(os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL"))
-    MYSQL_HOST = os.getenv("MYSQL_HOST", _url_cfg.get("host", "localhost"))
-    MYSQL_PORT = int(os.getenv("MYSQL_PORT", str(_url_cfg.get("port", 3306))))
-    MYSQL_USER = os.getenv("MYSQL_USER", _url_cfg.get("user", "root"))
-    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", _url_cfg.get("password", ""))
-    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", _url_cfg.get("database", "osas_bcp"))
-    MYSQL_SSL = os.getenv("MYSQL_SSL", "1" if FLASK_ENV == "production" else "0").lower() in ("1", "true", "yes")
+    # Prefer discrete MYSQL_* vars; also accept Railway-style names and MYSQL_URL / DATABASE_URL
+    _url_cfg = _parse_mysql_url(os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL") or os.getenv("MYSQL_PRIVATE_URL"))
+    MYSQL_HOST = os.getenv("MYSQL_HOST") or os.getenv("MYSQLHOST") or _url_cfg.get("host", "localhost")
+    MYSQL_PORT = int(os.getenv("MYSQL_PORT") or os.getenv("MYSQLPORT") or str(_url_cfg.get("port", 3306)))
+    MYSQL_USER = os.getenv("MYSQL_USER") or os.getenv("MYSQLUSER") or _url_cfg.get("user", "root")
+    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD") or os.getenv("MYSQLPASSWORD") or _url_cfg.get("password", "")
+    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE") or os.getenv("MYSQLDATABASE") or _url_cfg.get("database", "osas_bcp")
+    MYSQL_SSL = os.getenv("MYSQL_SSL", "0").lower() in ("1", "true", "yes")
 
     MAX_PROFILE_IMAGE_MB = int(os.getenv("MAX_PROFILE_IMAGE_MB", "2"))
     MAX_ATTACHMENT_MB = int(os.getenv("MAX_ATTACHMENT_MB", "5"))

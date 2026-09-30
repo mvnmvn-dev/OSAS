@@ -24,6 +24,7 @@ The database name is `osas_bcp`. Demo accounts created by `init_db.py` use passw
 
 Copy `.env.example` to `.env` for local overrides.
 
-## Deploy to Render
+## Deploy
 
-See [docs/RENDER_DEPLOY.md](docs/RENDER_DEPLOY.md) for the full guide (Flask web service + external MySQL).
+- **Railway (recommended):** [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md) — Flask + MySQL in one project  
+- **Render:** [docs/RENDER_DEPLOY.md](docs/RENDER_DEPLOY.md) — web on Render + external MySQL  
