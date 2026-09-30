@@ -1,9 +1,26 @@
 import os
 from datetime import timedelta
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+def _parse_mysql_url(url):
+    """Support MYSQL_URL / DATABASE_URL style: mysql://user:pass@host:3306/dbname"""
+    if not url:
+        return {}
+    parsed = urlparse(url)
+    if parsed.scheme not in ("mysql", "mysql2", "mysql+mysqlconnector"):
+        return {}
+    return {
+        "host": parsed.hostname or "localhost",
+        "port": parsed.port or 3306,
+        "user": parsed.username or "root",
+        "password": parsed.password or "",
+        "database": (parsed.path or "/osas_bcp").lstrip("/") or "osas_bcp",
+    }
 
 
 class Config:
@@ -29,11 +46,14 @@ class Config:
     REMEMBER_COOKIE_SAMESITE = SESSION_COOKIE_SAMESITE
     REMEMBER_COOKIE_SECURE = SESSION_COOKIE_SECURE
 
-    MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-    MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
-    MYSQL_USER = os.getenv("MYSQL_USER", "root")
-    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "")
-    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "osas_bcp")
+    # Prefer discrete MYSQL_* vars; fall back to MYSQL_URL / DATABASE_URL (common on hosts)
+    _url_cfg = _parse_mysql_url(os.getenv("MYSQL_URL") or os.getenv("DATABASE_URL"))
+    MYSQL_HOST = os.getenv("MYSQL_HOST", _url_cfg.get("host", "localhost"))
+    MYSQL_PORT = int(os.getenv("MYSQL_PORT", str(_url_cfg.get("port", 3306))))
+    MYSQL_USER = os.getenv("MYSQL_USER", _url_cfg.get("user", "root"))
+    MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", _url_cfg.get("password", ""))
+    MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", _url_cfg.get("database", "osas_bcp"))
+    MYSQL_SSL = os.getenv("MYSQL_SSL", "1" if FLASK_ENV == "production" else "0").lower() in ("1", "true", "yes")
 
     MAX_PROFILE_IMAGE_MB = int(os.getenv("MAX_PROFILE_IMAGE_MB", "2"))
     MAX_ATTACHMENT_MB = int(os.getenv("MAX_ATTACHMENT_MB", "5"))
@@ -70,6 +90,7 @@ class Config:
     SMS_PROVIDER_URL = os.getenv("SMS_PROVIDER_URL", "")
     SMS_API_KEY = os.getenv("SMS_API_KEY", "")
 
+    # Render free disk is ephemeral — files survive until the service restarts/redeploys
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "static/uploads")
     EXPORT_FOLDER = os.getenv("EXPORT_FOLDER", "static/exports")
 

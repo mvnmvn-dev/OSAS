@@ -75,14 +75,20 @@ def get_db():
         if current_app.config.get("TESTING"):
             g.db = _get_test_db()
         else:
-            g.db = mysql.connector.connect(
-                host=current_app.config["MYSQL_HOST"],
-                port=current_app.config["MYSQL_PORT"],
-                user=current_app.config["MYSQL_USER"],
-                password=current_app.config["MYSQL_PASSWORD"],
-                database=current_app.config["MYSQL_DATABASE"],
-                autocommit=False,
-            )
+            connect_kwargs = {
+                "host": current_app.config["MYSQL_HOST"],
+                "port": current_app.config["MYSQL_PORT"],
+                "user": current_app.config["MYSQL_USER"],
+                "password": current_app.config["MYSQL_PASSWORD"],
+                "database": current_app.config["MYSQL_DATABASE"],
+                "autocommit": False,
+            }
+            # Many managed MySQL hosts (Aiven, Railway, etc.) require SSL
+            if current_app.config.get("MYSQL_SSL"):
+                connect_kwargs["ssl_disabled"] = False
+                connect_kwargs["ssl_verify_cert"] = False
+                connect_kwargs["ssl_verify_identity"] = False
+            g.db = mysql.connector.connect(**connect_kwargs)
     return g.db
 
 

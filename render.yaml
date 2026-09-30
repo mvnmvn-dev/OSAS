@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: osas-bcp
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /api/health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: SHOW_DEMO_CREDENTIALS
+        value: "0"
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        value: "3306"
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        value: osas_bcp
+      - key: MYSQL_SSL
+        value: "1"
+      # Optional: leave uploads under static/ so Flask can serve them (ephemeral on free plan)
+      - key: UPLOAD_FOLDER
+        value: static/uploads
+      - key: EXPORT_FOLDER
+        value: static/exports

@@ -21,3 +21,9 @@ python app.py
 ```
 
 The database name is `osas_bcp`. Demo accounts created by `init_db.py` use password `password123`.
+
+Copy `.env.example` to `.env` for local overrides.
+
+## Deploy to Render
+
+See [docs/RENDER_DEPLOY.md](docs/RENDER_DEPLOY.md) for the full guide (Flask web service + external MySQL).

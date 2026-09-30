@@ -3,6 +3,7 @@ import os
 from flask import Flask, jsonify, render_template, request
 from flask_login import LoginManager, current_user, login_required
 from flask_wtf.csrf import CSRFProtect
+from werkzeug.middleware.proxy_fix import ProxyFix
 from config import Config
 from models.database import close_db
 from models.user import User
@@ -21,9 +22,12 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     app.config.setdefault('MYSQL_DATABASE', Config.MYSQL_DATABASE)
+    # Trust Render / reverse-proxy HTTPS headers so secure cookies work
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'static/uploads'), exist_ok=True)
     os.makedirs(app.config.get('EXPORT_FOLDER', 'static/exports'), exist_ok=True)
     os.makedirs(os.path.join(app.config.get('UPLOAD_FOLDER', 'static/uploads'), 'incidents'), exist_ok=True)
+    os.makedirs(os.path.join(app.config.get('UPLOAD_FOLDER', 'static/uploads'), 'avatars'), exist_ok=True)
     login_manager = LoginManager(); login_manager.login_view = 'auth.login'; login_manager.init_app(app)
     csrf.init_app(app)
     @login_manager.user_loader
@@ -62,5 +66,5 @@ if __name__ == '__main__':
     # Prefer FLASK_DEBUG / Config.DEBUG. Never force debug in production.
     debug = bool(app.config.get('DEBUG')) and app.config.get('FLASK_ENV') != 'production'
     host = os.getenv('FLASK_HOST', '127.0.0.1' if not debug else '0.0.0.0')
-    port = int(os.getenv('FLASK_PORT', '5000'))
+    port = int(os.getenv('PORT') or os.getenv('FLASK_PORT', '5000'))
     app.run(host=host, port=port, debug=debug)
