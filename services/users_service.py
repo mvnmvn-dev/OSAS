@@ -27,7 +27,7 @@ def get_activity_event_types():
     return list(dict.fromkeys(KNOWN_AUDIT_EVENTS + db_types))
 
 
-def list_users(role=None, account_status=None, search=None, page=None, per_page=10, **_ignored):
+def list_users(role=None, account_status=None, search=None, page=None, per_page=5, **_ignored):
     where = " WHERE 1=1"
     params = []
     if role:
@@ -250,7 +250,7 @@ def reset_password(user_id, actor_id, password=None):
     return True, temp
 
 
-def list_activity_log(event_type=None, actor=None, page=None, per_page=10):
+def list_activity_log(event_type=None, actor=None, page=None, per_page=5):
     where = " WHERE 1=1"
     params = []
     if event_type:

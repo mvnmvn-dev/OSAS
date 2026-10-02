@@ -14,7 +14,7 @@ from routes.safety import safety_bp
 from routes.profile import profile_bp
 from routes.users import users_bp
 from routes.api import api_bp
-from services.rbac import check_endpoint_access, get_forbidden_context, get_nav_for_role, get_role_label, has_permission, STAFF_TOOL_ENDPOINTS
+from services.rbac import check_endpoint_access, get_forbidden_context, get_nav_for_role, get_role_label, has_permission
 from services.notification_service import get_notification_panel, mark_all_read, mark_read
 
 csrf = CSRFProtect()
@@ -71,7 +71,7 @@ def create_app():
                 "has_perm": lambda p: has_permission(role, p),
                 "user_role": role,
                 "role_label": get_role_label(role),
-                "show_staff_banner": request.endpoint in STAFF_TOOL_ENDPOINTS,
+                "show_staff_banner": False,
                 "notifications": panel["items"],
                 "unread_count": panel["unread_count"],
                 "ops_alerts": panel["ops_alerts"],

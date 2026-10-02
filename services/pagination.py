@@ -1,4 +1,4 @@
-DEFAULT_PER_PAGE = 10
+DEFAULT_PER_PAGE = 5
 
 
 def get_page_from_request(default=1):
