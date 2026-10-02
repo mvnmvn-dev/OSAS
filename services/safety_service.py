@@ -312,28 +312,11 @@ CAMPUS_ZONES = [
 ]
 
 CAMPUS_CHECKPOINTS = [
-    ("G1", "Main Gate · Topaz / Sapphire", "ZA", 14.726050, 121.035880, 10),
-    ("G2", "Topaz Street Entrance", "ZA", 14.726420, 121.035620, 8),
-    ("G3", "Sapphire Street Entrance", "ZA", 14.725740, 121.036190, 8),
-    ("AC1", "Academic Building Lobby", "ZB", 14.726380, 121.036050, 5),
-    ("AC2", "Classroom Hallway · Ground Floor", "ZB", 14.726300, 121.036120, 5),
-    ("AC3", "Classroom Hallway · Upper Floor", "ZB", 14.726460, 121.036080, 5),
-    ("AC4", "Faculty Corridor", "ZB", 14.726420, 121.036020, 5),
-    ("LAB1", "Science Laboratory Wing", "ZC", 14.726550, 121.036920, 7),
-    ("LAB2", "Computer Laboratory Corridor", "ZC", 14.726120, 121.036820, 6),
-    ("LAB3", "Laboratory Equipment Storage", "ZC", 14.726470, 121.036850, 7),
-    ("ST1", "Open Court / Quadrangle", "ZD", 14.726450, 121.036130, 10),
-    ("ST2", "Student Center Lobby", "ZD", 14.726170, 121.036350, 9),
-    ("ST3", "Cafeteria Entrance", "ZD", 14.726050, 121.036500, 9),
-    ("ST4", "Covered Walkway", "ZD", 14.726300, 121.036300, 6),
-    ("AD1", "Administration Building Lobby", "ZE", 14.726780, 121.036020, 4),
-    ("AD2", "Registrar Office Corridor", "ZE", 14.726720, 121.036180, 4),
-    ("AD3", "Library Entrance", "ZE", 14.726670, 121.036480, 5),
-    ("AD4", "OSAS Command Center", "SECZ", 14.726300, 121.036440, 2),
-    ("PR1", "Parking Area", "ZF", 14.725920, 121.035710, 9),
-    ("PR2", "Back Gate / Service Gate", "ZF", 14.725590, 121.036930, 10),
-    ("PR3", "Perimeter Fence · East Side", "ZF", 14.725760, 121.037120, 10),
-    ("PR4", "Emergency Exit Gate", "ZF", 14.726020, 121.036980, 8),
+    # code, name, zone, lat, lng, official risk weight
+    ("ENT", "Entrance", "ZA", 14.726050, 121.035880, 10),
+    ("PG", "Prefect Guidance", "ZE", 14.726780, 121.036020, 6),
+    ("OSAS", "OSAS", "SECZ", 14.726300, 121.036440, 4),
+    ("ITS", "ITS", "ZC", 14.726120, 121.036820, 7),
 ]
 
 OFFICIAL_ZONE_FREQUENCY = {
@@ -346,20 +329,20 @@ OFFICIAL_ZONE_FREQUENCY = {
 }
 
 OFFICIAL_PATROL_ROUTES = {
-    "Alpha": ["G1", "G2", "AD1", "AD3", "AD4"],
-    "Bravo": ["ST1", "ST2", "ST3", "LAB2", "LAB1", "AD3"],
-    "Charlie": ["PR1", "G3", "G1", "ST1", "PR2"],
-    "Delta": ["PR2", "PR3", "PR4", "G2", "G1"],
+    "Alpha": ["ENT", "PG", "OSAS", "ITS"],
+    "Bravo": ["OSAS", "ITS", "PG", "ENT"],
+    "Charlie": ["ENT", "ITS", "OSAS", "PG"],
+    "Delta": ["PG", "ENT", "ITS", "OSAS"],
 }
 
 OFFICIAL_CHECKPOINT_RISK = {
-    "G1": ("Critical", 10), "G2": ("High", 8), "G3": ("High", 8),
-    "AC1": ("Medium", 5), "AC2": ("Medium", 5), "AC3": ("Medium", 5), "AC4": ("Medium", 5),
-    "LAB1": ("High", 7), "LAB2": ("Medium", 6), "LAB3": ("High", 7),
-    "ST1": ("High", 10), "ST2": ("High", 9), "ST3": ("High", 9), "ST4": ("Medium", 6),
-    "AD1": ("Medium", 4), "AD2": ("Medium", 4), "AD3": ("Medium", 5), "AD4": ("Low", 2),
-    "PR1": ("High", 9), "PR2": ("Critical", 10), "PR3": ("Critical", 10), "PR4": ("High", 8),
+    "ENT": ("Critical", 10),
+    "PG": ("Medium", 6),
+    "OSAS": ("Medium", 4),
+    "ITS": ("High", 7),
 }
+
+ACTIVE_CHECKPOINT_CODES = {row[0] for row in CAMPUS_CHECKPOINTS}
 
 
 def sync_mv_campus_geo():
@@ -372,7 +355,16 @@ def sync_mv_campus_geo():
             execute("INSERT INTO campus_zones (zone_code, zone_name, building_id, zone_type, risk_score) VALUES (%s,%s,%s,%s,%s)", (code, name, bmap.get(building_code) if building_code else None, ztype, risk))
         execute("UPDATE campus_zones SET zone_name=%s, zone_type=%s, active=1 WHERE zone_code=%s", (name, ztype, code))
     zmap = {r["zone_code"]: r["id"] for r in query_all("SELECT id, zone_code FROM campus_zones")}
-    legacy_checkpoint_map = {"G2": "G1", "QN": "ST1", "S1": "LAB1", "SC": "ST2", "SEC": "AD4"}
+    legacy_checkpoint_map = {
+        "G1": "ENT",
+        "G2": "ENT",
+        "G3": "ENT",
+        "AD1": "PG",
+        "AD4": "OSAS",
+        "SEC": "OSAS",
+        "LAB2": "ITS",
+        "LAB1": "ITS",
+    }
     for legacy_code, official_code in legacy_checkpoint_map.items():
         legacy = query_one("SELECT id FROM checkpoints WHERE checkpoint_code=%s", (legacy_code,))
         target = query_one("SELECT id FROM checkpoints WHERE checkpoint_code=%s", (official_code,))
@@ -380,8 +372,20 @@ def sync_mv_campus_geo():
             execute("UPDATE checkpoints SET checkpoint_code=%s WHERE id=%s", (official_code, legacy["id"]))
     for code, name, zcode, lat, lng, _risk in CAMPUS_CHECKPOINTS:
         if not query_one("SELECT id FROM checkpoints WHERE checkpoint_code=%s", (code,)):
-            execute("INSERT INTO checkpoints (checkpoint_code, checkpoint_name, zone_id, scan_token, latitude, longitude) VALUES (%s,%s,%s,%s,%s,%s)", (code, name, zmap[zcode], f"tok-{code.lower()}-{secrets.token_hex(4)}", lat, lng))
-        execute("UPDATE checkpoints SET checkpoint_name=%s, zone_id=%s, latitude=%s, longitude=%s, active=1 WHERE checkpoint_code=%s", (name, zmap[zcode], lat, lng, code))
+            execute(
+                """INSERT INTO checkpoints (checkpoint_code, checkpoint_name, zone_id, scan_token, latitude, longitude)
+                   VALUES (%s,%s,%s,%s,%s,%s)""",
+                (code, name, zmap[zcode], f"tok-{code.lower()}-{secrets.token_hex(4)}", lat, lng),
+            )
+        execute(
+            """UPDATE checkpoints SET checkpoint_name=%s, zone_id=%s, latitude=%s, longitude=%s, active=1
+               WHERE checkpoint_code=%s""",
+            (name, zmap[zcode], lat, lng, code),
+        )
+    # Retire former GIS-pack checkpoints that are no longer in the active set
+    for row in query_all("SELECT id, checkpoint_code FROM checkpoints") or []:
+        if row["checkpoint_code"] not in ACTIVE_CHECKPOINT_CODES:
+            execute("UPDATE checkpoints SET active=0 WHERE id=%s", (row["id"],))
     for legacy_zone in ("G2", "QN", "S1", "SCL"):
         execute("UPDATE campus_zones SET active=0 WHERE zone_code=%s", (legacy_zone,))
 
@@ -579,7 +583,12 @@ def _checkpoint_rows():
             "lat": float(r["latitude"]) if r["latitude"] is not None else None,
             "lng": float(r["longitude"]) if r["longitude"] is not None else None,
             "scan_token": r["scan_token"],
-            "map_class": {"G1": "gate", "G2": "gate", "G3": "gate", "LAB1": "science", "ST1": "quad", "ST2": "center", "AD4": "command", "PR2": "perimeter"}.get(r["checkpoint_code"]),
+            "map_class": {
+                "ENT": "gate",
+                "PG": "center",
+                "OSAS": "command",
+                "ITS": "science",
+            }.get(r["checkpoint_code"]),
             "zone_name": r.get("zone_name"),
             "active": True,
             "patrol_status": "On Schedule" if on_schedule else ("Delayed" if delayed else "Awaiting scan"),
@@ -889,7 +898,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
     all_incidents = incidents
     checkpoints = _checkpoint_rows()
     all_checkpoints = checkpoints
-    display_checkpoints = [c for c in checkpoints if c["code"] != "AD4"]
+    display_checkpoints = [c for c in checkpoints if c.get("active", True)]
 
     teams_raw = query_all(
         """
@@ -1041,7 +1050,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
     else:
         # Build preview sequence from risk weights
         weights = risk_scoring.checkpoint_priority_weights()
-        start = next((c for c in weights if c["code"] == "AD4"), weights[0] if weights else None)
+        start = next((c for c in weights if c["code"] == "OSAS"), weights[0] if weights else None)
         ranked = [c for c in weights if not start or c["checkpoint_id"] != start["checkpoint_id"]][:4]
         sequence = []
         if start:
@@ -1500,7 +1509,7 @@ def generate_route(patrol_date, team_name, start_code, duration, actor="OSAS Adm
     ensure_campus_seed()
     weights = risk_scoring.checkpoint_priority_weights()
     by_code = {w["code"]: w for w in weights}
-    start = by_code.get(start_code) or next((w for w in weights if w["code"] == "AD4"), weights[0])
+    start = by_code.get(start_code) or next((w for w in weights if w["code"] == "OSAS"), weights[0])
     others = [w for w in weights if w["checkpoint_id"] != start["checkpoint_id"] and w.get("lat") is not None]
     # Risk-prioritized visit set (top 4) then OSRM trip from start
     prioritized = sorted(others, key=lambda w: w["score"], reverse=True)[:4]
