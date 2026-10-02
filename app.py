@@ -15,7 +15,7 @@ from routes.profile import profile_bp
 from routes.users import users_bp
 from routes.api import api_bp
 from services.rbac import check_endpoint_access, get_forbidden_context, get_nav_for_role, get_role_label, has_permission, STAFF_TOOL_ENDPOINTS
-from services.notification_service import get_unread_count, get_user_notifications, mark_all_read, mark_read
+from services.notification_service import get_notification_panel, mark_all_read, mark_read
 
 csrf = CSRFProtect()
 logger = logging.getLogger(__name__)
@@ -46,12 +46,53 @@ def create_app():
         if current_user.is_authenticated:
             role = current_user.role
             try:
-                notifications = get_user_notifications(current_user.id)
-                unread_count = get_unread_count(current_user.id)
+                panel = get_notification_panel(current_user.id)
             except Exception:
-                notifications, unread_count = [], 0
-            return {'now':datetime.now(),'nav_sections':get_nav_for_role(role),'has_perm':lambda p:has_permission(role,p),'user_role':role,'role_label':get_role_label(role),'show_staff_banner':request.endpoint in STAFF_TOOL_ENDPOINTS,'notifications':notifications,'unread_count':unread_count}
-        return {'now':datetime.now(),'nav_sections':[],'has_perm':lambda p:False,'user_role':None,'role_label':None,'show_staff_banner':False,'notifications':[],'unread_count':0}
+                panel = {
+                    "items": [],
+                    "unread_count": 0,
+                    "ops_alerts": [],
+                    "ops_alert_count": 0,
+                    "total_attention": 0,
+                    "header_status": {
+                        "tone": "operational",
+                        "label": "System Operational",
+                        "rows": [
+                            ("Application", "Operational", ""),
+                            ("Database", "Operational", ""),
+                            ("Notifications", "Operational", ""),
+                            ("QR / Patrol Scan", "Operational", ""),
+                        ],
+                    },
+                }
+            return {
+                "now": datetime.now(),
+                "nav_sections": get_nav_for_role(role),
+                "has_perm": lambda p: has_permission(role, p),
+                "user_role": role,
+                "role_label": get_role_label(role),
+                "show_staff_banner": request.endpoint in STAFF_TOOL_ENDPOINTS,
+                "notifications": panel["items"],
+                "unread_count": panel["unread_count"],
+                "ops_alerts": panel["ops_alerts"],
+                "ops_alert_count": panel["ops_alert_count"],
+                "notif_attention": panel["total_attention"],
+                "header_status": panel["header_status"],
+            }
+        return {
+            "now": datetime.now(),
+            "nav_sections": [],
+            "has_perm": lambda p: False,
+            "user_role": None,
+            "role_label": None,
+            "show_staff_banner": False,
+            "notifications": [],
+            "unread_count": 0,
+            "ops_alerts": [],
+            "ops_alert_count": 0,
+            "notif_attention": 0,
+            "header_status": None,
+        }
     @app.errorhandler(403)
     def forbidden(e): return render_template('errors/403.html', forbidden_message=get_forbidden_context(), attempted_endpoint=request.endpoint), 403
     @app.errorhandler(404)
@@ -59,13 +100,13 @@ def create_app():
     @app.post('/notifications/<int:notification_id>/read')
     @login_required
     def notification_read(notification_id):
-        mark_read(notification_id, current_user.id)
-        return jsonify({'ok': True})
+        unread = mark_read(notification_id, current_user.id)
+        return jsonify({"ok": True, "data": {"unread_count": unread}})
     @app.post('/notifications/read-all')
     @login_required
     def notifications_read_all():
         mark_all_read(current_user.id)
-        return jsonify({'ok': True})
+        return jsonify({"ok": True, "data": {"unread_count": 0}})
     return app
 
 app = create_app()

@@ -425,31 +425,59 @@ const notifToggle = document.getElementById('notif-toggle');
 const notifDropdown = document.getElementById('notif-dropdown');
 const notifReadAll = document.getElementById('notif-read-all');
 const notifBadge = document.getElementById('notif-badge');
+const notifLiveCount = Number(document.querySelectorAll('.notif-item[data-source="live"]').length || 0);
 
-function updateNotifBadge(count) {
+function updateNotifBadge(inboxUnread) {
     if (!notifBadge) return;
-    if (count > 0) {
-        notifBadge.textContent = count;
+    const total = Math.max(0, Number(inboxUnread) || 0) + notifLiveCount;
+    if (total > 0) {
+        notifBadge.textContent = total > 99 ? '99+' : String(total);
         notifBadge.style.display = '';
     } else {
         notifBadge.style.display = 'none';
     }
 }
 
+function setNotifFilter(filter) {
+    document.querySelectorAll('.notif-tab').forEach((tab) => {
+        const active = tab.dataset.notifFilter === filter;
+        tab.classList.toggle('is-active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    document.querySelectorAll('.notif-group').forEach((group) => {
+        const key = group.dataset.notifGroup;
+        const show = filter === 'all' || filter === key;
+        group.hidden = !show;
+    });
+}
+
 if (notifToggle && notifDropdown) {
     notifToggle.addEventListener('click', (e) => {
         e.stopPropagation();
-        notifDropdown.classList.toggle('open');
+        const open = !notifDropdown.classList.contains('open');
+        notifDropdown.classList.toggle('open', open);
+        notifToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        document.getElementById('sys-status-panel')?.classList.remove('open');
+        document.getElementById('profile-menu')?.classList.remove('open');
     });
 
     document.addEventListener('click', (e) => {
         if (!notifDropdown.contains(e.target) && !notifToggle.contains(e.target)) {
             notifDropdown.classList.remove('open');
+            notifToggle.setAttribute('aria-expanded', 'false');
         }
     });
 }
 
-document.querySelectorAll('.notif-item[data-id]').forEach(item => {
+document.querySelectorAll('.notif-tab[data-notif-filter]').forEach((tab) => {
+    tab.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setNotifFilter(tab.dataset.notifFilter);
+    });
+});
+
+document.querySelectorAll('.notif-item[data-id]').forEach((item) => {
     item.addEventListener('click', async (e) => {
         const id = item.dataset.id;
         if (!id || !item.classList.contains('unread')) return;
@@ -461,9 +489,8 @@ document.querySelectorAll('.notif-item[data-id]').forEach(item => {
             });
             const data = await res.json();
             item.classList.remove('unread');
-            if (data.data?.unread_count !== undefined) {
-                updateNotifBadge(data.data.unread_count);
-            }
+            const unread = data?.data?.unread_count;
+            if (unread !== undefined) updateNotifBadge(unread);
         } catch { /* ignore */ }
         const href = item.getAttribute('href');
         if (href && href !== '#') window.location.href = href;
@@ -480,9 +507,13 @@ if (notifReadAll) {
                 headers: csrfHeaders({ 'Content-Type': 'application/json' }),
             });
             const data = await res.json();
-            document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
-            updateNotifBadge(0);
+            document.querySelectorAll('.notif-item[data-source="inbox"].unread').forEach((el) => el.classList.remove('unread'));
+            updateNotifBadge(data?.data?.unread_count ?? 0);
             notifReadAll.style.display = 'none';
+            const meta = document.getElementById('notif-header-meta');
+            if (meta) {
+                meta.textContent = notifLiveCount ? `${notifLiveCount} live · Inbox clear` : 'Inbox clear';
+            }
         } catch { /* ignore */ }
     });
 }

@@ -61,7 +61,7 @@
 </div>
 {% endif %}
 
-<div class="dashboard-stats grid-4 mb-6">
+<div class="dashboard-stats grid-4 mb-6 module-kpi-row">
 {% for card in safety.kpis %}
     {% if card.url %}
     <a href="{{ card.url }}" class="stat-card stat-card-link{% if card.theme %} stat-{{ card.theme }}{% endif %}"{% if status_filter and ('status=' ~ status_filter) in card.url %} aria-current="true"{% endif %}>
@@ -303,7 +303,7 @@
         <div class="analytics-summary-item">
             <span>Patrol coverage</span>
             <strong>{{ safety.analytics.summary.patrol_coverage }}%</strong>
-            <small>Target 90% · avg response {{ safety.analytics.summary.avg_response }}</small>
+            <small>Target 90% · {{ safety.analytics.summary.patrol_coverage }}% actual · avg response {{ safety.analytics.summary.avg_response }}</small>
         </div>
         <div class="analytics-summary-item">
             <span>Readiness</span>
@@ -346,6 +346,14 @@
             <div class="chart-card-header"><i class="fas fa-user-shield"></i> Personnel on duty</div>
             <div class="chart-canvas-wrap"><canvas id="chart-team-duty" aria-label="Team duty status chart"></canvas></div>
         </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-bullseye"></i> Module health vs targets</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-module-health" aria-label="Module health radar chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-layer-group"></i> Module activity (30d)</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-module-activity" aria-label="Module activity chart"></canvas></div>
+        </div>
     </div>
 
     <div class="panel-card insights-panel">
@@ -371,12 +379,13 @@
 </div>
 
 {% elif section == 'incidents' %}
-<div class="panel-card" id="incident-queue">
+<div class="module-shell">
+<div class="panel-card panel-elevated" id="incident-queue">
     <div class="section-header">
         <div>
-            <h2 class="section-title">Active Security Events</h2>
+            <h2 class="section-title"><i class="fas fa-triangle-exclamation"></i> Active Security Events</h2>
             <p class="section-subtitle">
-                Severity · Location · Status · Assignment
+                Severity · Location · Status · Assignment · {{ safety.last_updated }}
                 {% if status_filter %} · Showing <strong>{{ status_filter|replace('_', ' ')|title }}</strong> only · <a href="{{ url_for('safety.incidents') }}">Clear filter</a>{% endif %}
             </p>
         </div>
@@ -424,14 +433,16 @@
     {% endfor %}
     {{ render_pagination(safety.pagination.incidents) }}
 </div>
+</div>
 
 {% elif section in ['inspections', 'osas'] %}
+<div class="module-shell">
 <div class="dashboard-grid safety-grid">
-    <div class="panel-card" id="inspection-register">
+    <div class="panel-card panel-elevated" id="inspection-register">
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Safety inspection register</h2>
-                <p class="section-subtitle">Feeds OSAS actions and readiness score</p>
+                <p class="section-subtitle">Feeds OSAS actions and readiness score · {{ safety.last_updated }}</p>
             </div>
         </div>
         {% for item in safety.inspections %}
@@ -440,14 +451,20 @@
             <div class="safety-row-main"><strong>{{ item.code }} · {{ item.zone }}</strong><span>{{ item.type }} · {{ item.due }}</span></div>
             <span class="status-badge status-{{ item.status_class }}">{{ item.status }}</span>
         </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+            <strong>No inspections yet</strong>
+            <p>Schedule an inspection to start tracking compliance.</p>
+        </div>
         {% endfor %}
         {{ render_pagination(safety.pagination.inspections) }}
     </div>
-    <div class="panel-card" id="osas-actions">
+    <div class="panel-card panel-elevated" id="osas-actions">
         <div class="section-header">
             <div>
-                <h2 class="section-title">OSAS action register</h2>
-                <p class="section-subtitle">Items requiring review</p>
+                <h2 class="section-title"><i class="fas fa-list-check"></i> OSAS action register</h2>
+                <p class="section-subtitle">Hazards, restocks, and corrective items</p>
             </div>
             <a href="{{ url_for('safety.emergency') }}" class="btn-action">Emergency</a>
         </div>
@@ -459,10 +476,17 @@
                     <span>{{ action.detail }}</span>
                 </div>
             </div>
+        {% else %}
+            <div class="empty-security-state">
+                <i class="fas fa-check" aria-hidden="true"></i>
+                <strong>Action queue clear</strong>
+                <p>No open hazards or restock items right now.</p>
+            </div>
         {% endfor %}
         </div>
         {{ render_pagination(safety.pagination.actions) }}
     </div>
+</div>
 </div>
 
 {% elif section == 'emergency' %}
@@ -783,12 +807,13 @@
 </div>
 
 {% elif section == 'reports' %}
-<div class="dashboard-grid safety-grid">
-    <div class="panel-card">
+<div class="module-shell">
+<div class="dashboard-grid safety-grid mb-6">
+    <div class="panel-card panel-elevated">
         <div class="section-header">
             <div>
-                <h2 class="section-title"><i class="fas fa-chart-line"></i> Governance reports</h2>
-                <p class="section-subtitle">Exports pull from live module data</p>
+                <h2 class="section-title"><i class="fas fa-file-export"></i> Governance reports</h2>
+                <p class="section-subtitle">Exports pull from live module data · {{ safety.last_updated }}</p>
             </div>
         </div>
         <div class="report-action-list">
@@ -804,17 +829,17 @@
         </div>
         {{ render_pagination(safety.pagination.reports) }}
     </div>
-    <div class="panel-card">
+    <div class="panel-card panel-elevated">
         <div class="section-header">
             <div>
-                <h2 class="section-title">Trend highlights</h2>
-                <p class="section-subtitle">Live across incidents, zones, and drills</p>
+                <h2 class="section-title"><i class="fas fa-arrow-trend-up"></i> Trend highlights</h2>
+                <p class="section-subtitle">Computed from incidents, patrols, inspections, and drills</p>
             </div>
             <a href="{{ url_for('safety.activity') }}" class="btn-action">Activity</a>
         </div>
-        <div class="entity-list">
+        <div class="entity-list trend-highlight-list">
         {% for trend in safety.trends %}
-            <div class="entity-row">
+            <div class="entity-row trend-highlight-row">
                 <div class="entity-main">
                     <strong>{{ trend.title }}</strong>
                     <span>{{ trend.detail }}</span>
@@ -824,6 +849,64 @@
         </div>
         {{ render_pagination(safety.pagination.trends) }}
     </div>
+</div>
+
+{% if safety.analytics %}
+<section class="command-analytics mb-6" aria-label="Reports analytics">
+    <div class="section-header analytics-section-header">
+        <div>
+            <h2 class="section-title"><i class="fas fa-chart-pie"></i> Live analytics</h2>
+            <p class="section-subtitle">Same operational metrics used on the command dashboard</p>
+        </div>
+        <a href="{{ url_for('safety.index') }}" class="btn-action">Dashboard</a>
+    </div>
+    <div class="analytics-summary-strip">
+        <div class="analytics-summary-item">
+            <span>Incident load</span>
+            <strong>{{ safety.analytics.summary.incident_total }}</strong>
+            <small>{{ '%02d'|format(safety.analytics.summary.open_incidents) }} open · {{ safety.analytics.summary.resolved_rate }}% resolved</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Patrol coverage</span>
+            <strong>{{ safety.analytics.summary.patrol_coverage }}%</strong>
+            <small>Target 90% · avg response {{ safety.analytics.summary.avg_response }}</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Readiness</span>
+            <strong>{{ safety.analytics.summary.readiness }}%</strong>
+            <small>{{ safety.analytics.summary.actions_open }} OSAS actions open</small>
+        </div>
+        <div class="analytics-summary-item">
+            <span>Risk index</span>
+            <strong>{{ safety.analytics.summary.avg_risk }}</strong>
+            <small>Checkpoint-weighted campus average</small>
+        </div>
+    </div>
+    <div class="chart-grid chart-grid-safety mb-5">
+        <div class="chart-card chart-card-span-2">
+            <div class="chart-card-header"><i class="fas fa-wave-square"></i> Incident trend (14d)</div>
+            <div class="chart-canvas-wrap chart-canvas-tall"><canvas id="chart-incident-trend" aria-label="Incident volume trend chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-bullseye"></i> Module health</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-module-health" aria-label="Module health radar chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-route"></i> Patrol scans (7d)</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-patrol-trend" aria-label="Patrol scan trend chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-gauge-high"></i> Zone risk</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-zone-risk" aria-label="Zone risk ranking chart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <div class="chart-card-header"><i class="fas fa-layer-group"></i> Module activity</div>
+            <div class="chart-canvas-wrap"><canvas id="chart-module-activity" aria-label="Module activity chart"></canvas></div>
+        </div>
+    </div>
+    <script type="application/json" id="safety-analytics-data">{{ safety.analytics|tojson }}</script>
+</section>
+{% endif %}
 </div>
 
 {% elif section == 'activity' %}

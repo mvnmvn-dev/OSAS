@@ -125,11 +125,11 @@
 
                     <div class="sys-status-wrap">
 
-                        <button type="button" id="sys-status-toggle" class="sys-status-btn" aria-expanded="false" aria-controls="sys-status-panel" title="System status">
+                        <button type="button" id="sys-status-toggle" class="sys-status-btn tone-{{ header_status.tone if header_status else 'operational' }}" aria-expanded="false" aria-controls="sys-status-panel" title="System status">
 
-                            <span class="sys-status-dot" aria-hidden="true"></span>
+                            <span class="sys-status-dot tone-{{ header_status.tone if header_status else 'operational' }}" aria-hidden="true"></span>
 
-                            <span class="sys-status-label">System Operational</span>
+                            <span class="sys-status-label">{{ header_status.label if header_status else 'System Operational' }}</span>
 
                         </button>
 
@@ -137,19 +137,25 @@
 
                             <h3>System Status</h3>
 
+                            {% if header_status %}
+
+                            {% for row in header_status.rows %}
+
+                            <div class="sys-status-row"><span>{{ row[0] }}</span><strong class="{{ row[2] }}">{{ row[1] }}</strong></div>
+
+                            {% endfor %}
+
+                            {% else %}
+
                             <div class="sys-status-row"><span>Application</span><strong>Operational</strong></div>
 
                             <div class="sys-status-row"><span>Database</span><strong>Operational</strong></div>
 
-                            <div class="sys-status-row"><span>Notifications</span><strong>Operational</strong></div>
-
-                            <div class="sys-status-row"><span>QR / Patrol Scan</span><strong>Operational</strong></div>
+                            {% endif %}
 
                         </div>
 
                     </div>
-
-                    {% endif %}
 
 
 
@@ -157,69 +163,149 @@
 
                     <div class="notif-wrap">
 
-                        <button id="notif-toggle" class="header-icon-btn notif-btn" title="Notifications" aria-label="Notifications">
+                        <button id="notif-toggle" class="header-icon-btn notif-btn" title="Notifications" aria-label="Notifications" aria-expanded="false" aria-controls="notif-dropdown">
 
                             <i class="fas fa-bell"></i>
 
-                            {% if unread_count > 0 %}
+                            {% set badge_count = notif_attention if notif_attention is defined else unread_count %}
 
-                            <span class="notif-badge" id="notif-badge">{{ unread_count }}</span>
+                            {% if badge_count > 0 %}
+
+                            <span class="notif-badge" id="notif-badge">{{ badge_count if badge_count < 100 else '99+' }}</span>
+
+                            {% else %}
+
+                            <span class="notif-badge" id="notif-badge" style="display:none">0</span>
 
                             {% endif %}
 
                         </button>
 
-                        <div id="notif-dropdown" class="notif-dropdown">
+                        <div id="notif-dropdown" class="notif-dropdown" role="dialog" aria-label="Notifications">
 
                             <div class="notif-dropdown-header">
 
-                                <span>Notifications</span>
+                                <div class="notif-header-copy">
+
+                                    <span>Notifications</span>
+
+                                    <small id="notif-header-meta">{% if ops_alert_count %}{{ ops_alert_count }} live{% endif %}{% if ops_alert_count and unread_count %} · {% endif %}{% if unread_count %}{{ unread_count }} unread{% elif not ops_alert_count %}Inbox clear{% endif %}</small>
+
+                                </div>
 
                                 {% if unread_count > 0 %}
 
-                                <button id="notif-read-all" class="notif-read-all">Mark all read</button>
+                                <button id="notif-read-all" class="notif-read-all" type="button">Mark inbox read</button>
 
                                 {% endif %}
 
                             </div>
 
+                            <div class="notif-tabs" role="tablist">
+
+                                <button type="button" class="notif-tab is-active" data-notif-filter="all" role="tab" aria-selected="true">All</button>
+
+                                <button type="button" class="notif-tab" data-notif-filter="live" role="tab" aria-selected="false">Live{% if ops_alert_count %} <em>{{ ops_alert_count }}</em>{% endif %}</button>
+
+                                <button type="button" class="notif-tab" data-notif-filter="inbox" role="tab" aria-selected="false">Inbox{% if unread_count %} <em>{{ unread_count }}</em>{% endif %}</button>
+
+                            </div>
+
                             <div class="notif-list" id="notif-list">
 
-                                {% for note in notifications %}
+                                {% if ops_alerts %}
 
-                                <a href="{{ note.link or '#' }}" class="notif-item {% if not note.is_read %}unread{% endif %}" data-id="{{ note.id }}">
+                                <div class="notif-group" data-notif-group="live">
 
-                                    <div class="notif-item-icon notif-{{ note.ntype }}">
+                                    <p class="notif-group-label">Live campus signals</p>
 
-                                        <i class="fas fa-{% if note.ntype == 'success' %}check{% elif note.ntype == 'warning' %}exclamation{% elif note.ntype == 'danger' %}triangle-exclamation{% else %}info{% endif %}"></i>
+                                    {% for note in ops_alerts %}
 
-                                    </div>
+                                    <a href="{{ note.link or '#' }}" class="notif-item notif-live unread" data-source="live">
 
-                                    <div class="notif-item-body">
+                                        <div class="notif-item-icon notif-{{ note.ntype }}">
 
-                                        <p class="notif-item-title">{{ note.title }}</p>
+                                            <i class="fas fa-{{ note.icon }}"></i>
 
-                                        <p class="notif-item-msg">{{ note.message }}</p>
+                                        </div>
 
-                                        <p class="notif-item-time" data-timestamp="{{ note.created_at.isoformat() if note.created_at else '' }}">{{ note.created_at.strftime('%b %d, %Y %I:%M %p') if note.created_at else '' }}</p>
+                                        <div class="notif-item-body">
 
-                                    </div>
+                                            {% if note.tag %}<span class="notif-tag">{{ note.tag }}</span>{% endif %}
 
-                                </a>
+                                            <p class="notif-item-title">{{ note.title }}</p>
 
-                                {% else %}
+                                            <p class="notif-item-msg">{{ note.message }}</p>
 
-                                <div class="notif-empty-rich">
+                                            <p class="notif-item-time">{{ note.relative_time }}</p>
 
-                                    <i class="fas fa-bell" aria-hidden="true"></i>
+                                        </div>
 
-                                    <strong>You're all caught up</strong>
+                                    </a>
 
-                                    <p>There are no new security notifications.</p>
+                                    {% endfor %}
 
                                 </div>
 
-                                {% endfor %}
+                                {% endif %}
+
+                                <div class="notif-group" data-notif-group="inbox">
+
+                                    {% if notifications %}<p class="notif-group-label">Inbox</p>{% endif %}
+
+                                    {% for note in notifications %}
+
+                                    <a href="{{ note.link or '#' }}" class="notif-item {% if not note.is_read %}unread{% endif %}" data-id="{{ note.id }}" data-source="inbox">
+
+                                        <div class="notif-item-icon notif-{{ note.ntype }}">
+
+                                            <i class="fas fa-{{ note.icon if note.icon is defined else 'info' }}"></i>
+
+                                        </div>
+
+                                        <div class="notif-item-body">
+
+                                            <p class="notif-item-title">{{ note.title }}</p>
+
+                                            <p class="notif-item-msg">{{ note.message }}</p>
+
+                                            <p class="notif-item-time" data-timestamp="{{ note.created_iso if note.created_iso is defined else (note.created_at.isoformat() if note.created_at else '') }}">{{ note.relative_time if note.relative_time is defined else (note.created_at.strftime('%b %d, %Y %I:%M %p') if note.created_at else '') }}</p>
+
+                                        </div>
+
+                                    </a>
+
+                                    {% else %}
+
+                                    {% if not ops_alerts %}
+
+                                    <div class="notif-empty-rich">
+
+                                        <i class="fas fa-bell" aria-hidden="true"></i>
+
+                                        <strong>You're all caught up</strong>
+
+                                        <p>No live alerts or inbox messages right now.</p>
+
+                                    </div>
+
+                                    {% else %}
+
+                                    <div class="notif-empty-soft">No inbox messages yet — live signals are listed above.</div>
+
+                                    {% endif %}
+
+                                    {% endfor %}
+
+                                </div>
+
+                            </div>
+
+                            <div class="notif-dropdown-footer">
+
+                                <a href="{{ url_for('safety.activity') }}">Open activity log</a>
+
+                                <a href="{{ url_for('safety.incidents') }}">Incident queue</a>
 
                             </div>
 
@@ -312,6 +398,8 @@
                         </div>
 
                     </div>
+
+                    {% endif %}
 
                 </div>
 
