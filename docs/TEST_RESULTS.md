@@ -1,6 +1,6 @@
 # OSAS Test Results Summary
 
-Generated from a local run of the project test suite.
+This document records the latest verified baseline and the commands required to reproduce it. It is not a claim that the suite was rerun in every environment.
 
 ```bash
 pip install -r requirements.txt
@@ -12,7 +12,7 @@ pytest tests/ -v
 | Metric | Value |
 |--------|--------|
 | Date | 2026-09-30 |
-| Result | **19 passed** |
+| Result | **19 passed (historical baseline)** |
 | Duration | ~2.3s |
 | Failures | 0 |
 
@@ -31,7 +31,8 @@ pytest tests/ -v
 
 - Integration tests that touch MySQL require a configured local database (`MYSQL_*` in `.env`).
 - OSRM tests use mocked HTTP / heuristic fallback and do not require a live OSRM container.
-- Only report these results if the same suite still passes on the defense machine.
+- Four additional pure workflow-rule tests are now included in `tests/test_workflow_rules.py`; rerun the command below in a Python-enabled environment before reporting a new total.
+- Only report results as current if the same suite still passes on the defense machine.
 
 ## Commands used
 

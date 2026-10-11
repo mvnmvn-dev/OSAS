@@ -21,7 +21,7 @@ ENDPOINT_PERMISSIONS = {
     'notification_read':'profile.manage_own', 'notifications_read_all':'profile.manage_own',
     'profile.index':'profile.manage_own', 'profile.update':'profile.manage_own', 'profile.upload_photo':'profile.manage_own', 'profile.remove_photo':'profile.manage_own',
     'users.index':'users.manage', 'users.create':'users.manage', 'users.update':'users.manage', 'users.reset_password':'users.manage',
-    'api.campus_map':'safety.view', 'api.readiness':'safety.view', 'api.patrol_scan':'patrol.manage', 'api.visitors':'visitor.view',
+    'api.campus_map':'safety.view', 'api.readiness':'safety.view', 'api.patrol_scan':'patrol.manage', 'api.visitors':'visitor.view', 'api.checkpoint_risk_explanation':'safety.view',
 }
 NAV_SECTIONS = [
     {'label':'Command','items':[

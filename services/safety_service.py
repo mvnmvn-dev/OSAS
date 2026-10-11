@@ -18,6 +18,7 @@ from services.pagination import DEFAULT_PER_PAGE, paginate_items
 from services import osrm_client
 from services import risk_scoring
 from services import visitor_service
+from services.workflow import validate_incident_transition
 
 STATUS_UI = {
     "reported": ("Reported", "danger"),
@@ -1420,22 +1421,13 @@ def log_incident(title, location, priority="medium", actor="OSAS Administrator",
     return code
 
 
-def update_incident(code, status, notes="", actor="OSAS Administrator", user_id=None):
+def update_incident(code, status, notes="", actor="OSAS Administrator", user_id=None, actor_role=None):
     status = (status or "").lower()
-    allowed = {"reported", "verified", "responding", "resolved", "closed"}
-    if status not in allowed:
-        return False
     row = query_one("SELECT * FROM incidents WHERE incident_code=%s", (code,))
     if not row:
         return False
-    transitions = {
-        "reported": {"reported", "verified"},
-        "verified": {"verified", "responding", "resolved"},
-        "responding": {"responding", "resolved"},
-        "resolved": {"resolved", "closed"},
-        "closed": {"closed"},
-    }
-    if status not in transitions.get(row["status"], set()):
+    valid, _reason = validate_incident_transition(row["status"], status, actor_role, notes)
+    if not valid:
         return False
     extras = ""
     params = [status]
@@ -1645,13 +1637,33 @@ def record_checkpoint_scan(token_or_code, guard_id=None, team_id=None, method="q
     method = (method or "manual").lower()
     if method not in ("qr", "nfc", "gps", "manual"):
         method = "manual"
+    duplicate = query_one(
+        """SELECT id, scanned_at FROM patrol_logs
+           WHERE checkpoint_id=%s AND guard_id=%s
+           ORDER BY scanned_at DESC LIMIT 1""",
+        (cp["id"], guard_id),
+    )
+    previous_scan = duplicate.get("scanned_at") if duplicate else None
+    if isinstance(previous_scan, str):
+        try:
+            previous_scan = datetime.fromisoformat(previous_scan)
+        except ValueError:
+            previous_scan = None
+    if previous_scan and (datetime.now() - previous_scan).total_seconds() <= 60:
+        result = dict(cp)
+        result["scan_result"] = "duplicate"
+        result["scan_message"] = "Duplicate scan rejected within 60 seconds."
+        return result
     lid, _ = execute(
         """INSERT INTO patrol_logs (checkpoint_id, team_id, guard_id, scan_method, result, notes)
            VALUES (%s,%s,%s,%s,'valid',%s)""",
         (cp["id"], team_id, guard_id, method, notes),
     )
     write_audit("Checkpoint scanned", "patrol_log", lid, new_values={"checkpoint": cp["checkpoint_code"], "method": method})
-    return cp
+    result = dict(cp)
+    result["scan_result"] = "valid"
+    result["scan_message"] = "Checkpoint scan recorded."
+    return result
 
 
 def add_incident_attachment(incident_code, storage, filename, user_id=None):

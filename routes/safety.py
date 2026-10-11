@@ -196,7 +196,7 @@ def update_incident():
     code = (request.form.get('code') or '').strip()
     status = (request.form.get('status') or '').strip()
     notes = (request.form.get('notes') or '').strip()
-    if code and status and safety_svc.update_incident(code, status, notes, _actor(), _uid()):
+    if code and status and safety_svc.update_incident(code, status, notes, _actor(), _uid(), current_user.role):
         flash(f'Incident {code} updated to {status}.', 'success')
     else:
         flash('Unable to update incident record.', 'error')
@@ -307,7 +307,9 @@ def scan_checkpoint():
     method = request.form.get('scan_method') or 'qr'
     notes = request.form.get('notes') or ''
     cp = safety_svc.record_checkpoint_scan(token, guard_id=_uid(), method=method, notes=notes)
-    if cp:
+    if cp and cp.get('scan_result') == 'duplicate':
+        flash(cp.get('scan_message', 'Duplicate scan rejected.'), 'error')
+    elif cp:
         flash(f"Checkpoint {cp['checkpoint_code']} · {cp['checkpoint_name']} scanned ({method.upper()}).", 'success')
     else:
         flash('Checkpoint token/code not recognized.', 'error')

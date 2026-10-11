@@ -61,7 +61,19 @@ def patrol_scan():
     )
     if not result:
         return api_error("Checkpoint token or code not recognized", 404)
+    if result.get("scan_result") == "duplicate":
+        return api_error(result.get("scan_message", "Duplicate scan rejected."), 409)
     return api_response(result, "Checkpoint verified", 201)
+
+
+@api_bp.get("/risk/checkpoints/<int:checkpoint_id>/explanation")
+@login_required
+@require_permission("safety.view")
+def checkpoint_risk_explanation(checkpoint_id):
+    explanation = safety_service.risk_scoring.explain_checkpoint_score(checkpoint_id)
+    if not explanation:
+        return api_error("Checkpoint not found", 404)
+    return api_response(explanation)
 
 
 @api_bp.get("/visitors")

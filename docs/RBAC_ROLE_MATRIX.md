@@ -1,53 +1,48 @@
-# LMS Capstone — RBAC Role Matrix
+# OSAS RBAC Role Matrix
 
-**Roles:** Student (patron) · Librarian Staff · Admin
+OSAS uses least-privilege role permissions enforced by the application before-request guard and route decorators. Direct URL and API access use the same permission map; hiding a navigation item is not the security control.
 
-Permission levels: **none** · **view own** · **view all** · **manage**
+## Roles and permissions
 
-| Module | Student | Librarian Staff | Admin |
-|--------|---------|-----------------|-------|
-| Dashboard | view own stats | view all stats | view all stats |
-| Book Search | view / reserve own | view all | view all |
-| Reservations | manage own | manage all | manage all |
-| Borrowing | view own / renew own | manage all (checkout/checkin) | manage all |
-| Fines | view own / pay own online | view all / record payment | view all / record payment / **waive** |
-| E-Books | view own / access own | manage catalog & access | manage catalog & access |
-| Library Clearance | request own | manage all requests | manage all requests |
-| Lost / Damaged | report own | manage all reports | manage all reports |
-| Book Inventory | none | view / manage | view / manage |
-| ID Verification | none | **view only** (lookup & eligibility) | view + **manage card status** |
-| Reports & Analytics | none | view dashboards | view + **export system reports** |
-| User Management | none | none | **manage** (create, edit, disable, reset password, assign roles) |
-| Activity Log | none | none | **view** (audit trail) |
-| Notifications | view own | view own | view own |
+| Capability | Administrator | Security Head | Security Guard | Safety Officer | Faculty / Staff |
+|---|---|---|---|---|---|
+| Dashboard and safety overview | manage | view | view | view | view |
+| View incidents and emergency records | view | view | view | view | view |
+| Create/update incident records | manage | manage | — | manage | — |
+| Resolve incidents | manage | manage | manage | manage | — |
+| Close incidents | manage | manage | — | — | — |
+| Patrol routes and checkpoints | manage | manage | manage | — | — |
+| Visitor pass viewing | view | manage | manage | view | view |
+| Visitor registration and gate validation | manage | manage | manage | — | — |
+| Inspections, drills, and evacuation plans | manage | manage | — | manage | — |
+| Reports and exports | view/export | view | — | view/export | — |
+| User management and role assignment | manage | — | — | — | — |
+| Activity/audit views | view | — | — | — | — |
+| Own profile and password | manage own | manage own | manage own | manage own | manage own |
 
-## Staff vs Admin split
+`—` means the capability is not granted by the current role permission map. The incident service also enforces valid state transitions and requires closure by an administrator or security head, regardless of the caller's UI.
 
-**Librarian Staff** handles day-to-day library operations: checkout/check-in, fines (payment recording), reservations, lost/damaged reports, e-books, inventory, and viewing reports.
+## Incident workflow
 
-**Admin-only** capabilities:
-- User account management and role assignment
-- Library card status changes (verification decisions)
-- Fine waivers (with required reason → audit log)
-- System report export (CSV/HTML)
-- Activity log / security audit access
+```text
+Reported → Verified → Responding → Resolved → Closed
+```
 
-## Account states
+- Backward transitions are rejected.
+- `Resolved` requires response/resolution notes.
+- `Closed` requires the actor role to be `admin` or `security_head`.
+- Every accepted transition is written to `audit_logs` and notifies operational staff.
 
-| State | Field | Effect |
-|-------|-------|--------|
-| Physical card status | `card_status` | Eligibility for borrowing (active / suspended / expired / inactive) |
-| System login access | `account_status` | `active` = can log in; `disabled` = login blocked (history preserved) |
+## Patrol controls
 
-These are intentionally separate: an Admin can revoke login access without changing physical card records.
+- A checkpoint must be resolved by its active token or code.
+- A repeated scan from the same guard at the same checkpoint within 60 seconds is rejected server-side with HTTP 409 through the API.
+- Scan methods (`qr`, `nfc`, `gps`, `manual`) are stored as method labels; NFC/GPS hardware capture is not currently implemented.
 
-## Security controls implemented
+## Other controls implemented
 
-- Global `before_request` RBAC on every registered endpoint (including API)
-- IDOR checks on patron-scoped routes (clearance, fines pay-online, renew, API transactions/fines)
-- Failed-login throttling (5 attempts → 5-minute lockout)
-- Session idle timeout (45 minutes, configurable)
-- CSRF protection on all POST forms (Flask-WTF)
-- Safe redirect validation on login `next` parameter
-- `SECRET_KEY` required in production (`FLASK_ENV=production`)
-- Audit events logged to `analytics_log`: `role_changed`, `account_disabled`, `account_enabled`, `permission_denied`, `fine_waived`, `login_failed`, etc.
+- Failed-login lockout is configurable and stored per user.
+- CSRF protection covers web POST forms.
+- Session cookies use HTTP-only and SameSite settings; production enables secure cookies.
+- File extension and size validation applies to incident attachments.
+- Permission failures are handled through the global endpoint map and a 403 response.
