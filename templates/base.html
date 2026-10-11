@@ -123,19 +123,17 @@
 
                     {% if current_user.is_authenticated %}
 
-                    <form class="header-search-form" action="{{ url_for('safety.search') }}" method="get" role="search">
+                    <div class="header-search-form" role="search">
 
                         <label class="sr-only" for="header-search-input">Search OSAS</label>
 
                         <i class="fas fa-search header-search-icon" aria-hidden="true"></i>
 
-                        <input id="header-search-input" name="q" type="search" value="{{ request.args.get('q', '') if request.endpoint == 'safety.search' else '' }}" placeholder="Search OSAS..." autocomplete="off">
+                        <input id="header-search-input" name="q" type="search" placeholder="Search OSAS..." autocomplete="off" aria-controls="header-search-results" aria-expanded="false">
 
-                        <button type="submit" class="header-search-submit" aria-label="Submit search" title="Search">
-                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
-                        </button>
+                        <div id="header-search-results" class="header-search-results" role="listbox" aria-label="Search results"></div>
 
-                    </form>
+                    </div>
 
 
 

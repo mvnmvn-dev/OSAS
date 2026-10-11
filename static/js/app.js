@@ -143,6 +143,83 @@ if (searchToggle && searchOverlay) {
     });
 }
 
+// Inline OSAS header search
+const headerSearchInput = document.getElementById('header-search-input');
+const headerSearchResults = document.getElementById('header-search-results');
+let headerSearchTimer;
+let headerSearchController;
+
+function escapeSearchHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
+}
+
+function closeHeaderSearch() {
+    if (!headerSearchResults || !headerSearchInput) return;
+    headerSearchResults.innerHTML = '';
+    headerSearchResults.classList.remove('open');
+    headerSearchInput.setAttribute('aria-expanded', 'false');
+}
+
+function renderHeaderSearchResults(results) {
+    if (!headerSearchResults || !headerSearchInput) return;
+    if (!results.length) {
+        headerSearchResults.innerHTML = '<div class="header-search-empty">No matching records</div>';
+    } else {
+        headerSearchResults.innerHTML = results.map((result) => {
+            const icon = result.category === 'Incident'
+                ? 'fa-triangle-exclamation'
+                : result.category === 'Checkpoint' ? 'fa-location-crosshairs' : 'fa-route';
+            const code = result.code ? `${escapeSearchHtml(result.code)} · ` : '';
+            return `<a class="header-search-result" role="option" href="${escapeSearchHtml(result.url)}">
+                <span class="header-search-result-icon"><i class="fas ${icon}"></i></span>
+                <span><strong>${code}${escapeSearchHtml(result.name)}</strong><small>${escapeSearchHtml(result.category)} · ${escapeSearchHtml(result.detail)}</small></span>
+            </a>`;
+        }).join('');
+    }
+    headerSearchResults.classList.add('open');
+    headerSearchInput.setAttribute('aria-expanded', 'true');
+}
+
+async function loadHeaderSearchResults(query) {
+    if (!headerSearchResults || !headerSearchInput) return;
+    if (headerSearchController) headerSearchController.abort();
+    if (query.length < 2) {
+        closeHeaderSearch();
+        return;
+    }
+    headerSearchController = new AbortController();
+    headerSearchResults.innerHTML = '<div class="header-search-empty">Searching…</div>';
+    headerSearchResults.classList.add('open');
+    headerSearchInput.setAttribute('aria-expanded', 'true');
+    try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: headerSearchController.signal });
+        const payload = await response.json();
+        renderHeaderSearchResults(payload.success ? (payload.data || []) : []);
+    } catch (error) {
+        if (error.name !== 'AbortError') {
+            headerSearchResults.innerHTML = '<div class="header-search-empty">Search is temporarily unavailable</div>';
+        }
+    }
+}
+
+if (headerSearchInput) {
+    headerSearchInput.addEventListener('input', () => {
+        clearTimeout(headerSearchTimer);
+        headerSearchTimer = setTimeout(() => loadHeaderSearchResults(headerSearchInput.value.trim()), 180);
+    });
+    headerSearchInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+            closeHeaderSearch();
+            headerSearchInput.blur();
+        }
+    });
+    document.addEventListener('click', (event) => {
+        if (!event.target.closest('.header-search-form')) closeHeaderSearch();
+    });
+}
+
 async function apiCall(endpoint, method = 'GET', body = null) {
     const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (body) opts.body = JSON.stringify(body);
