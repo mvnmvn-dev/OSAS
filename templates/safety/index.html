@@ -48,17 +48,6 @@
 {% block content %}
 {% if section == 'overview' %}
 <div class="ops-mobile-order">
-<div class="campus-status-banner tone-{{ safety.campus_status.tone }}">
-    <div>
-        <p class="campus-status-kicker">Campus Security Status</p>
-        <p class="campus-status-meta">{{ safety.campus_status.datetime }}</p>
-        <p class="campus-status-meta">{{ safety.campus_status.detail }} · {{ safety.campus_status.updated }}</p>
-    </div>
-    <span class="campus-status-pill tone-{{ safety.campus_status.tone }}" role="status">
-        <span class="sys-status-dot tone-{{ safety.campus_status.tone }}" aria-hidden="true"></span>
-        {{ safety.campus_status.label }}
-    </span>
-</div>
 {% endif %}
 
 <div class="dashboard-stats grid-4 mb-6 module-kpi-row">
@@ -556,19 +545,6 @@
 </div>
 
 {% elif section == 'patrol' %}
-<div class="patrol-ops-header" id="route-performance">
-    <div>
-        <h2>Patrol Operations</h2>
-        <p class="section-subtitle" style="margin:0.35rem 0 0;">{{ safety.route.risk_reason }} · {{ safety.last_updated }}</p>
-        <p class="section-subtitle" style="margin:0.25rem 0 0;">{{ safety.route.routing_note }}</p>
-    </div>
-    <div class="patrol-ops-metrics">
-        <div><span>Active Routes</span><strong>{{ '%02d'|format(safety.patrol.active_routes) }}</strong></div>
-        <div><span>Coverage</span><strong>{{ safety.patrol.coverage }}%</strong></div>
-        <div><span>Completed</span><strong>{{ safety.patrol.completed }} / {{ safety.patrol.planned }}</strong></div>
-        <div><span>Missed</span><strong class="risk-danger">{{ '%02d'|format(safety.patrol.missed) }}</strong></div>
-    </div>
-</div>
 
 {% if safety.risk_demo %}
 <section class="risk-demo-panel panel-card mb-6" aria-label="Predictive patrol risk model">

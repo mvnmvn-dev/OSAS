@@ -1,5 +1,6 @@
 from flask import Blueprint, current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
+from models.database import query_all
 from services.rbac import require_permission
 from services import safety_service as safety_svc
 from services import visitor_service
@@ -74,6 +75,51 @@ def page(section='overview'):
         page_title=meta['title'],
         page_subtitle_text=meta['subtitle'],
         status_filter=status_filter,
+    )
+
+
+@safety_bp.route('/search')
+@login_required
+@require_permission('safety.view')
+def search():
+    query = (request.args.get('q') or '').strip()
+    results = []
+    if query:
+        like = f"%{query}%"
+        for row in query_all(
+            """SELECT incident_code AS code, title AS name, status AS detail,
+                      'Incident' AS category
+               FROM incidents
+               WHERE incident_code LIKE %s OR title LIKE %s OR description LIKE %s
+               ORDER BY reported_at DESC LIMIT 20""",
+            (like, like, like),
+        ):
+            results.append({**row, 'url': url_for('safety.incidents')})
+        for row in query_all(
+            """SELECT checkpoint_code AS code, checkpoint_name AS name,
+                      'Active checkpoint' AS detail, 'Checkpoint' AS category
+               FROM checkpoints
+               WHERE checkpoint_code LIKE %s OR checkpoint_name LIKE %s
+               ORDER BY checkpoint_name LIMIT 20""",
+            (like, like),
+        ):
+            results.append({**row, 'url': url_for('safety.teams')})
+        for row in query_all(
+            """SELECT route_name AS name, routing_engine AS detail,
+                      'Patrol route' AS category
+               FROM patrol_routes
+               WHERE route_name LIKE %s OR routing_engine LIKE %s
+               ORDER BY created_at DESC LIMIT 20""",
+            (like, like),
+        ):
+            results.append({**row, 'url': url_for('safety.patrol')})
+    return render_template(
+        'safety/search.html',
+        query=query,
+        results=results,
+        breadcrumbs=[('Search', None)],
+        page_title='Search OSAS',
+        page_subtitle_text='Search incidents, checkpoints, and patrol routes.',
     )
 
 

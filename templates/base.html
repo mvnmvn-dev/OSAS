@@ -123,39 +123,19 @@
 
                     {% if current_user.is_authenticated %}
 
-                    <div class="sys-status-wrap">
+                    <form class="header-search-form" action="{{ url_for('safety.search') }}" method="get" role="search">
 
-                        <button type="button" id="sys-status-toggle" class="sys-status-btn tone-{{ header_status.tone if header_status else 'operational' }}" aria-expanded="false" aria-controls="sys-status-panel" title="System status">
+                        <label class="sr-only" for="header-search-input">Search OSAS</label>
 
-                            <span class="sys-status-dot tone-{{ header_status.tone if header_status else 'operational' }}" aria-hidden="true"></span>
+                        <i class="fas fa-search header-search-icon" aria-hidden="true"></i>
 
-                            <span class="sys-status-label">{{ header_status.label if header_status else 'System Operational' }}</span>
+                        <input id="header-search-input" name="q" type="search" value="{{ request.args.get('q', '') if request.endpoint == 'safety.search' else '' }}" placeholder="Search OSAS..." autocomplete="off">
 
+                        <button type="submit" class="header-search-submit" aria-label="Submit search" title="Search">
+                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
                         </button>
 
-                        <div id="sys-status-panel" class="sys-status-panel" role="status">
-
-                            <h3>System Status</h3>
-
-                            {% if header_status %}
-
-                            {% for row in header_status.rows %}
-
-                            <div class="sys-status-row"><span>{{ row[0] }}</span><strong class="{{ row[2] }}">{{ row[1] }}</strong></div>
-
-                            {% endfor %}
-
-                            {% else %}
-
-                            <div class="sys-status-row"><span>Application</span><strong>Operational</strong></div>
-
-                            <div class="sys-status-row"><span>Database</span><strong>Operational</strong></div>
-
-                            {% endif %}
-
-                        </div>
-
-                    </div>
+                    </form>
 
 
 

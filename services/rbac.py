@@ -13,7 +13,7 @@ ROLE_LABELS = {'admin':'Administrator','security_head':'Security Head','guard':'
 PUBLIC_ENDPOINTS = frozenset({'auth.login','auth.logout','auth.index','auth.change_password','static','api.health'})
 ENDPOINT_PERMISSIONS = {
     'dashboard.index':'dashboard.view', 'safety.index':'safety.view', 'safety.osas':'safety.view', 'safety.log_incident':'safety.manage',
-    'safety.patrol':'patrol.view', 'safety.teams':'patrol.view', 'safety.incidents':'safety.view', 'safety.inspections':'safety.view', 'safety.emergency':'safety.view', 'safety.reports':'reports.view', 'safety.activity':'reports.view',
+    'safety.patrol':'patrol.view', 'safety.teams':'patrol.view', 'safety.incidents':'safety.view', 'safety.inspections':'safety.view', 'safety.emergency':'safety.view', 'safety.reports':'reports.view', 'safety.activity':'reports.view', 'safety.search':'safety.view',
     'safety.create_inspection':'safety.manage', 'safety.create_drill':'safety.manage', 'safety.create_plan':'safety.manage',
     'safety.generate_route':'patrol.manage', 'safety.save_team':'patrol.manage', 'safety.save_checkpoint':'patrol.manage',
     'safety.export_report':'reports.manage', 'safety.update_incident':'safety.manage', 'safety.visitors':'visitor.view', 'safety.register_visitor':'visitor.manage', 'safety.validate_visitor':'visitor.manage',
