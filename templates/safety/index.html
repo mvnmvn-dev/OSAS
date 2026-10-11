@@ -479,14 +479,6 @@
 </div>
 
 {% elif section == 'emergency' %}
-<div class="emergency-status-banner{% if not safety.emergency_status.normal %} alert{% endif %}">
-    <h2>Current Campus Status</h2>
-    <div class="emergency-status-state">
-        <span class="sys-status-dot {% if safety.emergency_status.normal %}{% else %}tone-critical{% endif %}" aria-hidden="true"></span>
-        {{ safety.emergency_status.label }}
-    </div>
-    <p class="emergency-status-note">{{ safety.emergency_status.detail }}</p>
-</div>
 <div class="dashboard-grid safety-grid">
     <div class="panel-card" id="drill-register">
         <div class="section-header">
