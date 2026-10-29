@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS evacuation_plans (
 
 CREATE TABLE IF NOT EXISTS patrol_teams (
   id INT AUTO_INCREMENT PRIMARY KEY, team_name VARCHAR(100) NOT NULL UNIQUE,
-  team_lead_id INT NULL, active TINYINT(1) NOT NULL DEFAULT 1,
+  team_lead_id INT NULL, lead_name VARCHAR(150) NULL, active TINYINT(1) NOT NULL DEFAULT 1,
   FOREIGN KEY (team_lead_id) REFERENCES users(id) ON DELETE SET NULL
 );
 

@@ -410,22 +410,42 @@ def sync_mv_campus_geo():
         execute("UPDATE incidents SET checkpoint_id=%s, team_id=%s WHERE incident_code='INC-24090' AND team_id IS NULL", (cp_its["id"], team_b["id"]))
     if cp_pg and team_a:
         execute("UPDATE incidents SET checkpoint_id=%s, team_id=%s WHERE incident_code='INC-24089' AND team_id IS NULL", (cp_pg["id"], team_a["id"]))
+    if team_a:
+        execute("UPDATE patrol_teams SET lead_name='Officer Cruz' WHERE id=%s AND (lead_name IS NULL OR lead_name='')", (team_a["id"],))
+    if team_b:
+        execute("UPDATE patrol_teams SET lead_name='Officer Santos' WHERE id=%s AND (lead_name IS NULL OR lead_name='')", (team_b["id"],))
 
 
 def _ensure_incident_schema():
-    """Ensure incidents table has checkpoint_id and team_id columns in runtime database."""
+    """Ensure incidents and patrol_teams have extended columns in runtime database."""
     try:
         is_testing = current_app.config.get("TESTING")
         if is_testing:
             info = query_all("PRAGMA table_info(incidents)")
             cols = {r["name"] for r in info} if info else set()
+            team_info = query_all("PRAGMA table_info(patrol_teams)")
+            team_cols = {r["name"] for r in team_info} if team_info else set()
         else:
             info = query_all("SHOW COLUMNS FROM incidents")
             cols = {r["Field"] for r in info} if info else set()
+            team_info = query_all("SHOW COLUMNS FROM patrol_teams")
+            team_cols = {r["Field"] for r in team_info} if team_info else set()
+
         if "checkpoint_id" not in cols:
-            execute("ALTER TABLE incidents ADD COLUMN checkpoint_id INT NULL")
+            try:
+                execute("ALTER TABLE incidents ADD COLUMN checkpoint_id INT NULL")
+            except Exception:
+                pass
         if "team_id" not in cols:
-            execute("ALTER TABLE incidents ADD COLUMN team_id INT NULL")
+            try:
+                execute("ALTER TABLE incidents ADD COLUMN team_id INT NULL")
+            except Exception:
+                pass
+        if "lead_name" not in team_cols:
+            try:
+                execute("ALTER TABLE patrol_teams ADD COLUMN lead_name VARCHAR(150) NULL")
+            except Exception:
+                pass
     except Exception:
         pass
 
@@ -973,7 +993,8 @@ def get_safety_dashboard(section="overview", status_filter=None):
 
     teams_raw = query_all(
         """
-        SELECT t.*, u.full_name AS lead_name,
+        SELECT t.*,
+               COALESCE(NULLIF(t.lead_name, ''), u.full_name, 'Unassigned') AS lead_name,
                (SELECT COUNT(*) FROM patrol_team_members m WHERE m.team_id = t.id) AS members,
                (SELECT COUNT(*) FROM patrol_shifts s WHERE s.team_id = t.id AND s.status = 'active') AS active_shifts,
                (SELECT COUNT(*) FROM incidents i WHERE i.team_id = t.id AND i.status NOT IN ('resolved', 'closed')) AS active_incidents
@@ -1811,21 +1832,39 @@ def generate_route(patrol_date, team_name, start_code, duration, actor="OSAS Adm
 
 
 def save_team(team_name, team_lead, assignment, actor="OSAS Administrator", user_id=None):
+    _ensure_incident_schema()
     existing = query_one("SELECT id FROM patrol_teams WHERE team_name=%s", (team_name,))
-    lead = query_one("SELECT id FROM users WHERE full_name LIKE %s OR username LIKE %s LIMIT 1", (f"%{team_lead}%", f"%{team_lead}%"))
-    lead_id = lead["id"] if lead else user_id
+    team_lead_stripped = (team_lead or "").strip()
+    lead = None
+    if team_lead_stripped:
+        lead = query_one(
+            "SELECT id, full_name FROM users WHERE full_name LIKE %s OR username LIKE %s LIMIT 1",
+            (f"%{team_lead_stripped}%", f"%{team_lead_stripped}%"),
+        )
+        lead_id = lead["id"] if lead else None
+        display_lead = team_lead_stripped
+    else:
+        lead_id = None
+        display_lead = "Unassigned"
+
     if existing:
-        execute("UPDATE patrol_teams SET team_lead_id=%s, active=1 WHERE id=%s", (lead_id, existing["id"]))
+        execute(
+            "UPDATE patrol_teams SET team_lead_id=%s, lead_name=%s, active=1 WHERE id=%s",
+            (lead_id, display_lead, existing["id"]),
+        )
         tid = existing["id"]
     else:
-        tid, _ = execute("INSERT INTO patrol_teams (team_name, team_lead_id, active) VALUES (%s,%s,1)", (team_name, lead_id))
+        tid, _ = execute(
+            "INSERT INTO patrol_teams (team_name, team_lead_id, lead_name, active) VALUES (%s,%s,%s,1)",
+            (team_name, lead_id, display_lead),
+        )
     if assignment and "Active" in assignment:
         execute(
             """INSERT INTO patrol_shifts (team_id, shift_date, start_time, end_time, guard_count, status)
                VALUES (%s, CURDATE(), '08:00:00', '16:00:00', 4, 'active')""",
             (tid,),
         )
-    write_audit("Team saved", "patrol_team", tid, new_values={"name": team_name, "lead": team_lead})
+    write_audit("Team saved", "patrol_team", tid, new_values={"name": team_name, "lead": display_lead})
 
 
 def save_checkpoint(code, name, method, actor="OSAS Administrator", user_id=None, lat=None, lng=None):

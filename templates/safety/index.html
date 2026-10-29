@@ -512,8 +512,9 @@
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-person-running"></i> Emergency drills</h2>
-                <p class="section-subtitle">Preparedness calendar linked to readiness</p>
+                <p class="section-subtitle">Preparedness calendar linked to campus readiness</p>
             </div>
+            <button class="btn-action" type="button" data-open-modal="drill-modal"><i class="fas fa-plus"></i> Schedule Drill</button>
         </div>
         {% for drill in safety.drills %}
         <div class="safety-row">
@@ -534,8 +535,9 @@
         <div class="section-header">
             <div>
                 <h2 class="section-title"><i class="fas fa-map"></i> Emergency Plans</h2>
-                <p class="section-subtitle">Approved map versions by building</p>
+                <p class="section-subtitle">Approved evacuation maps by building</p>
             </div>
+            <button class="btn-action" type="button" data-open-modal="plan-modal"><i class="fas fa-plus"></i> Add Plan</button>
         </div>
         <div class="entity-list">
         {% for plan in safety.plans %}
@@ -561,6 +563,97 @@
         {% endfor %}
         </div>
         {{ render_pagination(safety.pagination.plans) }}
+    </div>
+</div>
+
+<!-- Integrated Emergency Operations: Teams and Checkpoints -->
+<div class="dashboard-grid safety-grid mt-6" style="margin-top: 1.5rem;">
+    <!-- Panel 1: Emergency Response Teams -->
+    <div class="panel-card" id="emergency-teams-panel">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title"><i class="fas fa-users-shield"></i> Emergency Response Teams</h2>
+                <p class="section-subtitle">Patrol units designated for evacuation and emergency response</p>
+            </div>
+            <button class="btn-action" type="button" data-open-modal="team-modal"><i class="fas fa-plus"></i> Assign Team</button>
+        </div>
+        {% for team in safety.teams %}
+        <div class="safety-row">
+            <div class="incident-icon team-icon"><i class="fas fa-user-shield"></i></div>
+            <div class="safety-row-main">
+                <strong>{{ team.name }}</strong>
+                <span>Lead: {{ team.lead }} · {{ team.members }} guards · {{ team.shift }}{% if team.active_incidents %} · <strong style="color:#b91c1c;"><i class="fas fa-triangle-exclamation"></i> {{ team.active_incidents }} active incident{{ 's' if team.active_incidents != 1 else '' }}</strong>{% endif %}</span>
+            </div>
+            <span class="status-badge status-{{ team.status_class }}">
+                <span class="team-status-dot {% if team.status == 'On duty' %}active{% else %}idle{% endif %}" aria-hidden="true"></span>
+                {{ team.status }}
+            </span>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-users" aria-hidden="true"></i>
+            <strong>No response teams configured</strong>
+            <p>Assign patrol teams to manage emergency operations.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Panel 2: Assembly & Perimeter Checkpoints -->
+    <div class="panel-card" id="emergency-checkpoints-panel">
+        <div class="section-header">
+            <div>
+                <h2 class="section-title"><i class="fas fa-location-crosshairs"></i> Assembly & Perimeter Checkpoints</h2>
+                <p class="section-subtitle">Evacuation muster zones and security perimeters</p>
+            </div>
+            <button class="btn-action" type="button" data-open-modal="checkpoint-modal"><i class="fas fa-plus"></i> Add Point</button>
+        </div>
+        {% for cp in safety.checkpoints[:6] %}
+        <div class="safety-row">
+            <div class="incident-icon"><i class="fas fa-map-pin"></i></div>
+            <div class="safety-row-main">
+                <strong>{{ cp.code }} · {{ cp.name }}</strong>
+                <span>Zone: {{ cp.zone_name }} · Scan: {{ cp.last_scan }}{% if cp.open_incidents %} · <span style="color:#b91c1c;">⚠ {{ cp.open_incidents }} incident{{ 's' if cp.open_incidents != 1 else '' }}</span>{% endif %}</span>
+            </div>
+            <span class="status-badge status-{% if cp.tone == 'low' %}success{% elif cp.tone == 'medium' %}warning{% else %}danger{% endif %}">
+                Risk {{ cp.risk_level }}
+            </span>
+        </div>
+        {% else %}
+        <div class="empty-security-state">
+            <i class="fas fa-location-crosshairs" aria-hidden="true"></i>
+            <strong>No checkpoints registered</strong>
+            <p>Register checkpoints to define evacuation routes and assembly stations.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Emergency Compliance: Safety Inspections for Readiness -->
+<div class="panel-card mt-6" id="emergency-inspections-panel" style="margin-top: 1.5rem;">
+    <div class="section-header">
+        <div>
+            <h2 class="section-title"><i class="fas fa-clipboard-check"></i> Emergency Preparedness & Safety Inspections</h2>
+            <p class="section-subtitle">Fire safety equipment, egress clearances, first aid supplies, and hazard checks</p>
+        </div>
+        <button class="btn-action" type="button" data-open-modal="inspection-modal"><i class="fas fa-plus"></i> Schedule Inspection</button>
+    </div>
+    <div class="emergency-inspections-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.85rem;">
+        {% for item in safety.inspections[:6] %}
+        <div class="safety-row" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:0.5rem; padding:0.75rem 1rem;">
+            <div class="incident-icon"><i class="fas {{ item.icon }}"></i></div>
+            <div class="safety-row-main">
+                <strong>{{ item.code }} · {{ item.zone }}</strong>
+                <span>{{ item.type }} · Due: {{ item.due }}</span>
+            </div>
+            <span class="status-badge status-{{ item.status_class }}">{{ item.status }}</span>
+        </div>
+        {% else %}
+        <div class="empty-security-state" style="grid-column: 1 / -1;">
+            <i class="fas fa-clipboard-check" aria-hidden="true"></i>
+            <strong>No inspections registered</strong>
+            <p>Schedule readiness inspections to ensure compliance before drills.</p>
+        </div>
+        {% endfor %}
     </div>
 </div>
 
@@ -985,12 +1078,253 @@
 <div id="attach-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Attach incident file</h2><form method="POST" action="{{ url_for('safety.attach_incident_file') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident code<input name="code" required placeholder="e.g. INC-24091" list="incident-code-options"></label><datalist id="incident-code-options">{% for incident in safety.incidents %}<option value="{{ incident.code }}"></option>{% endfor %}</datalist><label>Photo / document<input type="file" name="attachment" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Upload</button></div></form></div></div>
 <div id="notify-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Notify parent / guardian</h2><form method="POST" action="{{ url_for('safety.notify_parent') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident code<input name="code" required list="incident-code-options-notify"></label><datalist id="incident-code-options-notify">{% for incident in safety.incidents %}<option value="{{ incident.code }}"></option>{% endfor %}</datalist><label>Recipient name<input name="recipient_name" required></label><label>Channel<select name="channel"><option value="email">Email</option><option value="sms">SMS</option><option value="push">Push</option></select></label><label>Email<input name="email" type="email"></label><label>Phone<input name="phone"></label><label>Message<textarea name="message" rows="3" required placeholder="Notification message"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Queue Notification</button></div></form></div></div>
 <div id="incident-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Report a campus incident</h2><form method="POST" action="{{ url_for('safety.log_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident title<input name="title" required placeholder="e.g. Suspicious activity, water leak, gate trespass"></label><label>Security Checkpoint<select name="checkpoint_id" id="incident-modal-checkpoint"><option value="">— Select Checkpoint (Optional) —</option>{% for cp in safety.all_checkpoints %}<option value="{{ cp.id }}">{{ cp.code }} · {{ cp.name }} ({{ cp.zone_name }})</option>{% endfor %}</select></label><label>Location / Details<input name="location" placeholder="Specific room, wing, or gate description" list="incident-checkpoint-options"></label><datalist id="incident-checkpoint-options">{% for cp in safety.all_checkpoints %}<option value="{{ cp.name }}">{{ cp.code }} · {{ cp.zone_name }}</option>{% endfor %}</datalist><label>Incident Type<select name="incident_type"><option value="security">Security</option><option value="safety_hazard">Safety Hazard</option><option value="medical">Medical</option><option value="fire">Fire</option><option value="earthquake">Earthquake</option><option value="lockdown">Lockdown</option><option value="other">Other</option></select></label><label>Priority<select name="priority"><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option><option value="low">Low</option></select></label><label>Assign Patrol Team<select name="team_id" id="incident-modal-team"><option value="">— Unassigned (Standby) —</option>{% for team in safety.teams_options %}<option value="{{ team.id }}">{{ team.name }} (Lead: {{ team.lead }} · {{ team.status }})</option>{% endfor %}</select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Create Incident</button></div></form></div></div>
-<div id="incident-detail-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog modal-dialog-wide"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2 id="incident-detail-title">Incident record</h2><div class="incident-detail-hero"><div><span id="incident-detail-priority" class="severity-badge severity-medium">Medium</span></div><p class="modal-subtitle" id="incident-detail-subtitle" style="margin:0.5rem 0 0;">Select a record to update</p></div><div class="incident-detail-grid"><div class="incident-detail-field"><label>Location</label><p id="incident-detail-location">—</p></div><div class="incident-detail-field"><label>Linked Checkpoint</label><p id="incident-detail-checkpoint">—</p></div><div class="incident-detail-field"><label>Reported</label><p id="incident-detail-reported">—</p></div><div class="incident-detail-field"><label>Status</label><p id="incident-detail-status-phrase">—</p></div><div class="incident-detail-field" style="grid-column: span 2;"><label>Assigned Patrol Team</label><p id="incident-detail-team">—</p></div></div><h3 class="section-title" style="margin-bottom:0.75rem;">Incident Timeline</h3><ul class="incident-timeline" id="incident-detail-timeline"></ul><form method="POST" action="{{ url_for('safety.update_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="code" id="incident-detail-code"><label>Status<select name="status" id="incident-detail-status"><option value="reported">Reported</option><option value="verified">Verified</option><option value="responding">Responding</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select></label><label>Assign Patrol Team<select name="team_id" id="incident-detail-team-select"><option value="">— Unassigned —</option>{% for team in safety.teams_options %}<option value="{{ team.id }}">{{ team.name }} (Lead: {{ team.lead }} · {{ team.status }})</option>{% endfor %}</select></label><label>Linked Checkpoint<select name="checkpoint_id" id="incident-detail-checkpoint-select"><option value="">— None / Unlinked —</option>{% for cp in safety.all_checkpoints %}<option value="{{ cp.id }}">{{ cp.code }} · {{ cp.name }} ({{ cp.zone_name }})</option>{% endfor %}</select></label><label>Response notes<textarea name="notes" rows="3" placeholder="Action taken, assignment directives, or handover notes"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Update</button></div></form></div></div>
-<div id="inspection-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Inspections and Risks</span><h2>Schedule safety inspection</h2><form method="POST" action="{{ url_for('safety.create_inspection') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Zone<input name="zone" required placeholder="e.g. Science Building" list="zone-options"></label><datalist id="zone-options">{% for cp in safety.checkpoints %}<option value="{{ cp.name }}"></option>{% endfor %}</datalist><label>Inspection type<select name="type"><option>Fire safety</option><option>Access control</option><option>First aid and supplies</option><option>General safety</option></select></label><label>Scheduled date<input type="date" name="date" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Inspection</button></div></form></div></div>
-<div id="drill-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Emergency Plans and Drills</span><h2>Schedule emergency drill</h2><form method="POST" action="{{ url_for('safety.create_drill') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Drill title<input name="title" required placeholder="e.g. Fire evacuation drill"></label><label>Type<select name="type"><option>Fire</option><option>Earthquake</option><option>Lockdown</option><option>Medical</option></select></label><label>Schedule<input type="datetime-local" name="scheduled_at" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Drill</button></div></form></div></div>
-<div id="plan-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Emergency Plans and Drills</span><h2>Add evacuation plan</h2><form method="POST" action="{{ url_for('safety.create_plan') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Building<input name="building" required></label><label>Floor or area<input name="floor" required></label><label>Assembly zone<input name="assembly_zone" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Plan</button></div></form></div></div>
-<div id="team-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Teams and Checkpoints</span><h2>Patrol team and route assignment</h2><form method="POST" action="{{ url_for('safety.save_team') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Team name<input name="team_name" required placeholder="e.g. Team Charlie"></label><label>Team lead<input name="team_lead" required placeholder="Guard name"></label><label>Assignment<select name="assignment"><option>Active patrol shift</option><option>Predictive route · Today</option><option>Standby</option></select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Assignment</button></div></form></div></div>
-<div id="checkpoint-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Teams and Checkpoints</span><h2>Add checkpoint</h2><form method="POST" action="{{ url_for('safety.save_checkpoint') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Checkpoint code<input name="checkpoint_code" required placeholder="e.g. ENT, PG, OSAS, ITS"></label><label>Name<input name="checkpoint_name" required placeholder="e.g. Entrance"></label><label>Scan method<select name="scan_method"><option>QR</option><option>NFC</option><option>GPS</option></select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Checkpoint</button></div></form></div></div>
+<div id="incident-detail-modal" class="modal">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog modal-dialog-wide incident-modal-card">
+        <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
+        <div class="incident-modal-header">
+            <span class="eyebrow"><i class="fas fa-shield-halved"></i> Incident Response Management</span>
+            <div class="incident-title-row">
+                <h2 id="incident-detail-title" class="incident-title-heading">Incident record</h2>
+                <span id="incident-detail-priority" class="severity-badge severity-medium">Medium</span>
+            </div>
+            <p class="modal-subtitle" id="incident-detail-subtitle" style="display:none;"></p>
+        </div>
+
+        <div class="incident-cards-grid">
+            <div class="incident-card-cell">
+                <span class="cell-label"><i class="fas fa-location-dot"></i> Location</span>
+                <p id="incident-detail-location" class="cell-val">—</p>
+            </div>
+            <div class="incident-card-cell">
+                <span class="cell-label"><i class="fas fa-location-crosshairs"></i> Linked Checkpoint</span>
+                <p id="incident-detail-checkpoint" class="cell-val">—</p>
+            </div>
+            <div class="incident-card-cell">
+                <span class="cell-label"><i class="fas fa-calendar-day"></i> Reported Date & Time</span>
+                <p id="incident-detail-reported" class="cell-val">—</p>
+            </div>
+            <div class="incident-card-cell">
+                <span class="cell-label"><i class="fas fa-signal"></i> Lifecycle Status</span>
+                <p id="incident-detail-status-phrase" class="cell-val">—</p>
+            </div>
+            <div class="incident-card-cell incident-card-cell-wide">
+                <span class="cell-label"><i class="fas fa-user-shield"></i> Assigned Patrol Team</span>
+                <p id="incident-detail-team" class="cell-val highlight-team">—</p>
+            </div>
+        </div>
+
+        <div class="incident-timeline-section">
+            <h3 class="section-title"><i class="fas fa-timeline"></i> Incident Activity Timeline</h3>
+            <ul class="incident-timeline" id="incident-detail-timeline"></ul>
+        </div>
+
+        <form method="POST" action="{{ url_for('safety.update_incident') }}" class="incident-update-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="code" id="incident-detail-code">
+
+            <div class="form-row-grid">
+                <div class="form-field-item">
+                    <label for="incident-detail-status"><i class="fas fa-tag"></i> Update Status</label>
+                    <select name="status" id="incident-detail-status">
+                        <option value="reported">Reported</option>
+                        <option value="verified">Verified</option>
+                        <option value="responding">Responding</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+
+                <div class="form-field-item">
+                    <label for="incident-detail-team-select"><i class="fas fa-users-gear"></i> Assign Patrol Team</label>
+                    <select name="team_id" id="incident-detail-team-select">
+                        <option value="">— Unassigned —</option>
+                        {% for team in safety.teams_options %}
+                        <option value="{{ team.id }}">{{ team.name }} (Lead: {{ team.lead }} · {{ team.status }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-field-item mt-2">
+                <label for="incident-detail-checkpoint-select"><i class="fas fa-map-pin"></i> Linked Checkpoint</label>
+                <select name="checkpoint_id" id="incident-detail-checkpoint-select">
+                    <option value="">— None / Unlinked —</option>
+                    {% for cp in safety.all_checkpoints %}
+                    <option value="{{ cp.id }}">{{ cp.code }} · {{ cp.name }} ({{ cp.zone_name }})</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="form-field-item mt-2">
+                <label for="incident-detail-notes"><i class="fas fa-pen-to-square"></i> Response Directives / Investigation Notes</label>
+                <textarea id="incident-detail-notes" name="notes" rows="2" placeholder="Action taken, assignment directives, or handover notes..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-modal><i class="fas fa-xmark"></i> Cancel</button>
+                <button class="btn-primary-square" type="submit"><i class="fas fa-check"></i> Save & Dispatch</button>
+            </div>
+        </form>
+    </div>
+</div>
+<div id="inspection-modal" class="modal">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+        <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
+        <span class="eyebrow"><i class="fas fa-clipboard-check"></i> Inspections and Risks</span>
+        <h2>Schedule Safety Inspection</h2>
+        <p class="modal-subtitle">Log a routine compliance or safety hazard inspection</p>
+        <form method="POST" action="{{ url_for('safety.create_inspection') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label><i class="fas fa-location-dot"></i> Campus Zone or Building
+                <input name="zone" required placeholder="e.g. Science Building, Main Gate" list="zone-options">
+            </label>
+            <datalist id="zone-options">
+                {% for cp in safety.checkpoints %}
+                <option value="{{ cp.name }}">{{ cp.code }} · {{ cp.zone_name }}</option>
+                {% endfor %}
+            </datalist>
+            <label><i class="fas fa-list-check"></i> Inspection Type
+                <select name="type">
+                    <option>Fire safety</option>
+                    <option>Access control</option>
+                    <option>First aid and supplies</option>
+                    <option>General safety</option>
+                </select>
+            </label>
+            <label><i class="fas fa-calendar"></i> Scheduled Date
+                <input type="date" name="date" required>
+            </label>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-modal><i class="fas fa-xmark"></i> Cancel</button>
+                <button class="btn-primary-square" type="submit"><i class="fas fa-check"></i> Save Inspection</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="drill-modal" class="modal">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+        <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
+        <span class="eyebrow"><i class="fas fa-person-running"></i> Emergency Preparedness</span>
+        <h2>Schedule Emergency Drill</h2>
+        <p class="modal-subtitle">Plan a university-wide or building drill to boost response readiness</p>
+        <form method="POST" action="{{ url_for('safety.create_drill') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label><i class="fas fa-heading"></i> Drill Title
+                <input name="title" required placeholder="e.g. Campus Fire Evacuation Drill">
+            </label>
+            <label><i class="fas fa-triangle-exclamation"></i> Drill Type
+                <select name="type">
+                    <option>Fire</option>
+                    <option>Earthquake</option>
+                    <option>Lockdown</option>
+                    <option>Medical</option>
+                </select>
+            </label>
+            <label><i class="fas fa-clock"></i> Scheduled Date & Time
+                <input type="datetime-local" name="scheduled_at" required>
+            </label>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-modal><i class="fas fa-xmark"></i> Cancel</button>
+                <button class="btn-primary-square" type="submit"><i class="fas fa-check"></i> Save Drill</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="plan-modal" class="modal">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+        <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
+        <span class="eyebrow"><i class="fas fa-map"></i> Emergency Operations</span>
+        <h2>Add Evacuation Plan</h2>
+        <p class="modal-subtitle">Register approved building evacuation routes and assembly zones</p>
+        <form method="POST" action="{{ url_for('safety.create_plan') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label><i class="fas fa-building"></i> Building Name
+                <input name="building" required placeholder="e.g. Main Academic Hall">
+            </label>
+            <label><i class="fas fa-stairs"></i> Floor or Area Coverage
+                <input name="floor" required placeholder="e.g. Floors 1-4, East & West Wings">
+            </label>
+            <label><i class="fas fa-location-crosshairs"></i> Assembly Zone
+                <input name="assembly_zone" required placeholder="e.g. Grandstand Open Grounds, Gate 1 Plaza" list="plan-assembly-options">
+            </label>
+            <datalist id="plan-assembly-options">
+                {% for cp in safety.checkpoints %}
+                <option value="{{ cp.name }}">{{ cp.code }} · {{ cp.zone_name }}</option>
+                {% endfor %}
+            </datalist>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-modal><i class="fas fa-xmark"></i> Cancel</button>
+                <button class="btn-primary-square" type="submit"><i class="fas fa-check"></i> Save Plan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="team-modal" class="modal">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+        <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
+        <span class="eyebrow"><i class="fas fa-users-gear"></i> Patrol Operations</span>
+        <h2>Patrol Team and Assignment</h2>
+        <p class="modal-subtitle">Create or update a security patrol team and designate its lead</p>
+        <form method="POST" action="{{ url_for('safety.save_team') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label><i class="fas fa-users"></i> Team Name
+                <input name="team_name" required placeholder="e.g. Team Charlie">
+            </label>
+            <label><i class="fas fa-user-shield"></i> Designated Team Lead
+                <input name="team_lead" required placeholder="Guard / Officer name">
+            </label>
+            <label><i class="fas fa-calendar-check"></i> Shift Assignment
+                <select name="assignment">
+                    <option>Active patrol shift</option>
+                    <option>Predictive route · Today</option>
+                    <option>Standby</option>
+                </select>
+            </label>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-modal><i class="fas fa-xmark"></i> Cancel</button>
+                <button class="btn-primary-square" type="submit"><i class="fas fa-check"></i> Save Assignment</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="checkpoint-modal" class="modal">
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog">
+        <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
+        <span class="eyebrow"><i class="fas fa-location-crosshairs"></i> Checkpoint Registry</span>
+        <h2>Register Checkpoint</h2>
+        <p class="modal-subtitle">Add a security checkpoint for patrol scans and incident geotagging</p>
+        <form method="POST" action="{{ url_for('safety.save_checkpoint') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <label><i class="fas fa-barcode"></i> Checkpoint Code
+                <input name="checkpoint_code" required placeholder="e.g. ENT, PG, OSAS, ITS">
+            </label>
+            <label><i class="fas fa-map-pin"></i> Checkpoint Name
+                <input name="checkpoint_name" required placeholder="e.g. Main Gate Entrance">
+            </label>
+            <label><i class="fas fa-qrcode"></i> Scan Verification Method
+                <select name="scan_method">
+                    <option>QR</option>
+                    <option>NFC</option>
+                    <option>GPS</option>
+                </select>
+            </label>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-close-modal><i class="fas fa-xmark"></i> Cancel</button>
+                <button class="btn-primary-square" type="submit"><i class="fas fa-check"></i> Save Checkpoint</button>
+            </div>
+        </form>
+    </div>
+</div>
 <div id="report-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Reports and Analytics</span><h2>Prepare OSAS report</h2><form method="POST" action="{{ url_for('safety.export_report') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Report type<select name="report_type" id="report-type-select"><option>Incident summary</option><option>Patrol completion</option><option>Inspection compliance</option><option>Audit log</option></select></label><label>Date range<select name="range"><option>Last 7 days</option><option>Last 30 days</option><option>Current semester</option></select></label><label>Format<select name="format"><option>PDF</option><option>CSV</option><option>Excel</option></select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Prepare Export</button></div></form></div></div>
 <div id="visitor-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Visitors and Gate Security</span><h2>Register visitor</h2><form method="POST" action="{{ url_for('safety.register_visitor') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Full name<input name="full_name" required></label><label>Host / office<input name="host_name" required></label><label>Purpose<input name="purpose" required placeholder="Meeting, document pickup, delivery"></label><label>Visit date<input type="date" name="visit_date" required></label><label>Phone<input name="phone"></label><label>Email<input type="email" name="email"></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Issue QR Pass</button></div></form></div></div>
 <div id="visitor-validate-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Gate Security</span><h2>Verify visitor pass</h2><form method="POST" action="{{ url_for('safety.validate_visitor') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Pass code<input name="pass_code" required placeholder="VIS-YYYYMMDD-XXXXXXXX"></label><label>Gate action<select name="action"><option value="entry">Entry / check in</option><option value="exit">Exit confirmation</option></select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Validate Pass</button></div></form></div></div>

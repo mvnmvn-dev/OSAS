@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS patrol_teams (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     team_name TEXT NOT NULL UNIQUE,
     team_lead_id INTEGER,
+    lead_name TEXT,
     active INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS patrol_team_members (
