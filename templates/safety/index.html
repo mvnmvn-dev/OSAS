@@ -120,8 +120,15 @@
             <span class="severity-badge severity-{{ incident.priority_class }}">{{ incident.priority_label }}</span>
             <div class="active-event-body">
                 <strong>{{ incident.title }}</strong>
-                <span>{{ incident.location }} · {{ incident.time }}</span>
-                <span>{{ incident.team or 'Unassigned' }} · {{ incident.status_phrase }}</span>
+                <span>
+                    {% if incident.checkpoint_code %}
+                    <strong><i class="fas fa-location-crosshairs"></i> {{ incident.checkpoint_code }}</strong> · 
+                    {% endif %}
+                    {{ incident.location }} · {{ incident.time }}
+                </span>
+                <span>
+                    <strong><i class="fas fa-user-shield"></i> {{ incident.team or 'Unassigned' }}</strong> · {{ incident.status_phrase }}
+                </span>
             </div>
             <button class="btn-primary-square" type="button"
                 data-open-modal="incident-detail-modal"
@@ -132,6 +139,10 @@
                 data-incident-status-key="{{ incident.status_key }}"
                 data-incident-status-phrase="{{ incident.status_phrase }}"
                 data-incident-team="{{ incident.team or 'Unassigned' }}"
+                data-incident-team-id="{{ incident.team_id or '' }}"
+                data-incident-checkpoint-id="{{ incident.checkpoint_id or '' }}"
+                data-incident-checkpoint-code="{{ incident.checkpoint_code or '' }}"
+                data-incident-checkpoint-name="{{ incident.checkpoint_name or '' }}"
                 data-incident-priority="{{ incident.priority_label }}"
                 data-incident-priority-class="{{ incident.priority_class }}"
                 data-incident-reported="{{ incident.reported_full }}"
@@ -393,9 +404,22 @@
     <div class="incident-queue-row">
         <div class="iq-severity"><span class="severity-badge severity-{{ incident.priority_class }}">{{ incident.priority_label }}</span></div>
         <div class="iq-title safety-row-main"><strong>{{ incident.title }}</strong><span>{{ incident.code }}</span></div>
-        <div class="iq-location">{{ incident.location }}</div>
+        <div class="iq-location">
+            {% if incident.checkpoint_code %}
+            <strong style="display:inline-block; font-size:0.75rem; background:#e0e7ff; color:#3730a3; padding:1px 5px; border-radius:4px; margin-right:4px;">
+                <i class="fas fa-location-crosshairs"></i> {{ incident.checkpoint_code }}
+            </strong>
+            {% endif %}
+            {{ incident.location }}
+        </div>
         <div class="iq-time">{{ incident.time }}</div>
-        <div class="iq-team">{{ incident.team or 'Unassigned' }}</div>
+        <div class="iq-team">
+            {% if incident.team and incident.team != 'Unassigned' %}
+            <strong style="color:var(--bcp-navy, #1e3a8a);"><i class="fas fa-user-shield"></i> {{ incident.team }}</strong>
+            {% else %}
+            <span style="color:#94a3b8; font-style:italic;">Unassigned</span>
+            {% endif %}
+        </div>
         <div class="iq-status"><span class="status-badge status-{{ incident.status_class }}">{{ incident.status }}</span></div>
         <div class="iq-actions">
             <button class="btn-action" type="button"
@@ -407,6 +431,10 @@
                 data-incident-status-key="{{ incident.status_key }}"
                 data-incident-status-phrase="{{ incident.status_phrase }}"
                 data-incident-team="{{ incident.team or 'Unassigned' }}"
+                data-incident-team-id="{{ incident.team_id or '' }}"
+                data-incident-checkpoint-id="{{ incident.checkpoint_id or '' }}"
+                data-incident-checkpoint-code="{{ incident.checkpoint_code or '' }}"
+                data-incident-checkpoint-name="{{ incident.checkpoint_name or '' }}"
                 data-incident-priority="{{ incident.priority_label }}"
                 data-incident-priority-class="{{ incident.priority_class }}"
                 data-incident-reported="{{ incident.reported_full }}"
@@ -682,7 +710,7 @@
         {% for team in safety.teams %}
         <div class="safety-row">
             <div class="incident-icon team-icon"><i class="fas fa-user-shield"></i></div>
-            <div class="safety-row-main"><strong>{{ team.name }}</strong><span>Lead: {{ team.lead }} · {{ team.members }} members · {{ team.shift }}</span></div>
+            <div class="safety-row-main"><strong>{{ team.name }}</strong><span>Lead: {{ team.lead }} · {{ team.members }} members · {{ team.shift }}{% if team.active_incidents %} · <strong style="color:#b91c1c;"><i class="fas fa-triangle-exclamation"></i> {{ team.active_incidents }} active incident{{ 's' if team.active_incidents != 1 else '' }}</strong>{% endif %}</span></div>
             <span class="status-badge status-{{ team.status_class }}">
                 <span class="team-status-dot {% if team.status == 'On duty' %}active{% else %}idle{% endif %}" aria-hidden="true"></span>
                 {{ team.status }}
@@ -723,8 +751,8 @@
                         <strong>{% if cp.patrol_status_ok %}✓ {% endif %}{{ cp.patrol_status }}</strong>
                     </div>
                     <div>
-                        <span>Method</span>
-                        <strong>{{ cp.method }}</strong>
+                        <span>Active Incidents</span>
+                        <strong {% if cp.open_incidents %}style="color:#b91c1c;"{% endif %}>{{ cp.open_incidents or 0 }}</strong>
                     </div>
                     <div>
                         <span>Risk Level</span>
@@ -956,8 +984,8 @@
 <div id="scan-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Predictive Patrol Planning</span><h2>Scan checkpoint</h2><p class="modal-subtitle">Enter a QR token or checkpoint code. Method tags how the scan was recorded (QR / NFC tag / GPS / manual) — this screen uses manual token entry, not hardware NFC tap.</p><form method="POST" action="{{ url_for('safety.scan_checkpoint') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Scan token or checkpoint code<input name="scan_token" required placeholder="e.g. G2 or tok-…" list="checkpoint-scan-options"></label><datalist id="checkpoint-scan-options">{% for cp in safety.all_checkpoints %}<option value="{{ cp.code }}">{{ cp.name }}</option><option value="{{ cp.scan_token }}">{{ cp.code }} token</option>{% endfor %}</datalist><label>Recorded method<select name="scan_method"><option value="qr">QR (token / code)</option><option value="nfc">NFC (logged method tag)</option><option value="gps">GPS (logged method tag)</option><option value="manual">Manual check-in</option></select></label><label>Notes<input name="notes" placeholder="Optional notes"></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Record Scan</button></div></form></div></div>
 <div id="attach-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Attach incident file</h2><form method="POST" action="{{ url_for('safety.attach_incident_file') }}" enctype="multipart/form-data"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident code<input name="code" required placeholder="e.g. INC-24091" list="incident-code-options"></label><datalist id="incident-code-options">{% for incident in safety.incidents %}<option value="{{ incident.code }}"></option>{% endfor %}</datalist><label>Photo / document<input type="file" name="attachment" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Upload</button></div></form></div></div>
 <div id="notify-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal type="button"><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Notify parent / guardian</h2><form method="POST" action="{{ url_for('safety.notify_parent') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident code<input name="code" required list="incident-code-options-notify"></label><datalist id="incident-code-options-notify">{% for incident in safety.incidents %}<option value="{{ incident.code }}"></option>{% endfor %}</datalist><label>Recipient name<input name="recipient_name" required></label><label>Channel<select name="channel"><option value="email">Email</option><option value="sms">SMS</option><option value="push">Push</option></select></label><label>Email<input name="email" type="email"></label><label>Phone<input name="phone"></label><label>Message<textarea name="message" rows="3" required placeholder="Notification message"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Queue Notification</button></div></form></div></div>
-<div id="incident-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Report a campus incident</h2><form method="POST" action="{{ url_for('safety.log_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident title<input name="title" required placeholder="e.g. Suspicious activity"></label><label>Location<input name="location" required placeholder="Building, floor, gate, or checkpoint"></label><label>Priority<select name="priority"><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option><option value="low">Low</option></select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Create Incident</button></div></form></div></div>
-<div id="incident-detail-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog modal-dialog-wide"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2 id="incident-detail-title">Incident record</h2><div class="incident-detail-hero"><div><span id="incident-detail-priority" class="severity-badge severity-medium">Medium</span></div><p class="modal-subtitle" id="incident-detail-subtitle" style="margin:0.5rem 0 0;">Select a record to update</p></div><div class="incident-detail-grid"><div class="incident-detail-field"><label>Location</label><p id="incident-detail-location">—</p></div><div class="incident-detail-field"><label>Reported</label><p id="incident-detail-reported">—</p></div><div class="incident-detail-field"><label>Status</label><p id="incident-detail-status-phrase">—</p></div><div class="incident-detail-field"><label>Assigned Team</label><p id="incident-detail-team">—</p></div></div><h3 class="section-title" style="margin-bottom:0.75rem;">Incident Timeline</h3><ul class="incident-timeline" id="incident-detail-timeline"></ul><form method="POST" action="{{ url_for('safety.update_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="code" id="incident-detail-code"><label>Status<select name="status" id="incident-detail-status"><option value="reported">Reported</option><option value="verified">Verified</option><option value="responding">Responding</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select></label><label>Response notes<textarea name="notes" rows="3" placeholder="Action taken or handover notes"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Update</button></div></form></div></div>
+<div id="incident-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2>Report a campus incident</h2><form method="POST" action="{{ url_for('safety.log_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Incident title<input name="title" required placeholder="e.g. Suspicious activity, water leak, gate trespass"></label><label>Security Checkpoint<select name="checkpoint_id" id="incident-modal-checkpoint"><option value="">— Select Checkpoint (Optional) —</option>{% for cp in safety.all_checkpoints %}<option value="{{ cp.id }}">{{ cp.code }} · {{ cp.name }} ({{ cp.zone_name }})</option>{% endfor %}</select></label><label>Location / Details<input name="location" placeholder="Specific room, wing, or gate description" list="incident-checkpoint-options"></label><datalist id="incident-checkpoint-options">{% for cp in safety.all_checkpoints %}<option value="{{ cp.name }}">{{ cp.code }} · {{ cp.zone_name }}</option>{% endfor %}</datalist><label>Incident Type<select name="incident_type"><option value="security">Security</option><option value="safety_hazard">Safety Hazard</option><option value="medical">Medical</option><option value="fire">Fire</option><option value="earthquake">Earthquake</option><option value="lockdown">Lockdown</option><option value="other">Other</option></select></label><label>Priority<select name="priority"><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option><option value="low">Low</option></select></label><label>Assign Patrol Team<select name="team_id" id="incident-modal-team"><option value="">— Unassigned (Standby) —</option>{% for team in safety.teams_options %}<option value="{{ team.id }}">{{ team.name }} (Lead: {{ team.lead }} · {{ team.status }})</option>{% endfor %}</select></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Create Incident</button></div></form></div></div>
+<div id="incident-detail-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog modal-dialog-wide"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Incident Response</span><h2 id="incident-detail-title">Incident record</h2><div class="incident-detail-hero"><div><span id="incident-detail-priority" class="severity-badge severity-medium">Medium</span></div><p class="modal-subtitle" id="incident-detail-subtitle" style="margin:0.5rem 0 0;">Select a record to update</p></div><div class="incident-detail-grid"><div class="incident-detail-field"><label>Location</label><p id="incident-detail-location">—</p></div><div class="incident-detail-field"><label>Linked Checkpoint</label><p id="incident-detail-checkpoint">—</p></div><div class="incident-detail-field"><label>Reported</label><p id="incident-detail-reported">—</p></div><div class="incident-detail-field"><label>Status</label><p id="incident-detail-status-phrase">—</p></div><div class="incident-detail-field" style="grid-column: span 2;"><label>Assigned Patrol Team</label><p id="incident-detail-team">—</p></div></div><h3 class="section-title" style="margin-bottom:0.75rem;">Incident Timeline</h3><ul class="incident-timeline" id="incident-detail-timeline"></ul><form method="POST" action="{{ url_for('safety.update_incident') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="code" id="incident-detail-code"><label>Status<select name="status" id="incident-detail-status"><option value="reported">Reported</option><option value="verified">Verified</option><option value="responding">Responding</option><option value="resolved">Resolved</option><option value="closed">Closed</option></select></label><label>Assign Patrol Team<select name="team_id" id="incident-detail-team-select"><option value="">— Unassigned —</option>{% for team in safety.teams_options %}<option value="{{ team.id }}">{{ team.name }} (Lead: {{ team.lead }} · {{ team.status }})</option>{% endfor %}</select></label><label>Linked Checkpoint<select name="checkpoint_id" id="incident-detail-checkpoint-select"><option value="">— None / Unlinked —</option>{% for cp in safety.all_checkpoints %}<option value="{{ cp.id }}">{{ cp.code }} · {{ cp.name }} ({{ cp.zone_name }})</option>{% endfor %}</select></label><label>Response notes<textarea name="notes" rows="3" placeholder="Action taken, assignment directives, or handover notes"></textarea></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Update</button></div></form></div></div>
 <div id="inspection-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Inspections and Risks</span><h2>Schedule safety inspection</h2><form method="POST" action="{{ url_for('safety.create_inspection') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Zone<input name="zone" required placeholder="e.g. Science Building" list="zone-options"></label><datalist id="zone-options">{% for cp in safety.checkpoints %}<option value="{{ cp.name }}"></option>{% endfor %}</datalist><label>Inspection type<select name="type"><option>Fire safety</option><option>Access control</option><option>First aid and supplies</option><option>General safety</option></select></label><label>Scheduled date<input type="date" name="date" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Inspection</button></div></form></div></div>
 <div id="drill-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Emergency Plans and Drills</span><h2>Schedule emergency drill</h2><form method="POST" action="{{ url_for('safety.create_drill') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Drill title<input name="title" required placeholder="e.g. Fire evacuation drill"></label><label>Type<select name="type"><option>Fire</option><option>Earthquake</option><option>Lockdown</option><option>Medical</option></select></label><label>Schedule<input type="datetime-local" name="scheduled_at" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Drill</button></div></form></div></div>
 <div id="plan-modal" class="modal"><div class="modal-backdrop" data-close-modal></div><div class="modal-dialog"><button class="modal-close" data-close-modal><i class="fas fa-xmark"></i></button><span class="eyebrow">Emergency Plans and Drills</span><h2>Add evacuation plan</h2><form method="POST" action="{{ url_for('safety.create_plan') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Building<input name="building" required></label><label>Floor or area<input name="floor" required></label><label>Assembly zone<input name="assembly_zone" required></label><div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save Plan</button></div></form></div></div>
@@ -985,6 +1013,9 @@ document.addEventListener('click', function (event) {
     var reported = document.getElementById('incident-detail-reported');
     var statusPhrase = document.getElementById('incident-detail-status-phrase');
     var team = document.getElementById('incident-detail-team');
+    var teamSelect = document.getElementById('incident-detail-team-select');
+    var checkpoint = document.getElementById('incident-detail-checkpoint');
+    var checkpointSelect = document.getElementById('incident-detail-checkpoint-select');
     var timeline = document.getElementById('incident-detail-timeline');
     if (title) title.textContent = trigger.dataset.incidentCode + ' · ' + trigger.dataset.incidentTitle;
     if (subtitle) subtitle.textContent = trigger.dataset.incidentTitle || '';
@@ -993,6 +1024,13 @@ document.addEventListener('click', function (event) {
     if (reported) reported.textContent = trigger.dataset.incidentReported || trigger.dataset.incidentStatus || '—';
     if (statusPhrase) statusPhrase.textContent = trigger.dataset.incidentStatusPhrase || trigger.dataset.incidentStatus || '—';
     if (team) team.textContent = trigger.dataset.incidentTeam || 'Unassigned';
+    if (teamSelect) teamSelect.value = trigger.dataset.incidentTeamId || '';
+    if (checkpoint) {
+      var cpName = trigger.dataset.incidentCheckpointName;
+      var cpCode = trigger.dataset.incidentCheckpointCode;
+      checkpoint.textContent = cpName ? (cpCode ? cpCode + ' · ' + cpName : cpName) : 'None';
+    }
+    if (checkpointSelect) checkpointSelect.value = trigger.dataset.incidentCheckpointId || '';
     if (priority) {
       var pClass = trigger.dataset.incidentPriorityClass || 'medium';
       priority.className = 'severity-badge severity-' + pClass;

@@ -31,12 +31,11 @@ def score_for_checkpoint(checkpoint_id, now=None):
         """
         SELECT i.priority, i.reported_at
         FROM incidents i
-        JOIN checkpoints c ON c.zone_id = i.zone_id
-        WHERE c.id = %s
+        WHERE (i.checkpoint_id = %s OR (i.checkpoint_id IS NULL AND i.zone_id = (SELECT zone_id FROM checkpoints WHERE id = %s)))
           AND i.reported_at >= (NOW() - INTERVAL %s DAY)
           AND i.status NOT IN ('closed')
         """,
-        (checkpoint_id, WINDOW_DAYS),
+        (checkpoint_id, checkpoint_id, WINDOW_DAYS),
     )
     raw = 0.0
     for row in incidents:
@@ -163,13 +162,12 @@ def explain_checkpoint_score(checkpoint_id, now=None, limit=5):
         """
         SELECT i.priority, i.reported_at, i.title, i.incident_code
         FROM incidents i
-        JOIN checkpoints c ON c.zone_id = i.zone_id
-        WHERE c.id = %s
+        WHERE (i.checkpoint_id = %s OR (i.checkpoint_id IS NULL AND i.zone_id = (SELECT zone_id FROM checkpoints WHERE id = %s)))
           AND i.reported_at >= (NOW() - INTERVAL %s DAY)
           AND i.status NOT IN ('closed')
         ORDER BY i.reported_at DESC
         """,
-        (checkpoint_id, WINDOW_DAYS),
+        (checkpoint_id, checkpoint_id, WINDOW_DAYS),
     )
     for row in incidents:
         priority = (row.get("priority") or "medium").lower()

@@ -34,10 +34,33 @@ CREATE TABLE IF NOT EXISTS campus_zones (
     risk_score REAL NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1
 );
+CREATE TABLE IF NOT EXISTS checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    checkpoint_code TEXT NOT NULL UNIQUE,
+    checkpoint_name TEXT NOT NULL,
+    zone_id INTEGER NOT NULL,
+    scan_token TEXT NOT NULL UNIQUE,
+    latitude REAL,
+    longitude REAL,
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS patrol_teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_name TEXT NOT NULL UNIQUE,
+    team_lead_id INTEGER,
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS patrol_team_members (
+    team_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    PRIMARY KEY (team_id, user_id)
+);
 CREATE TABLE IF NOT EXISTS incidents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     incident_code TEXT NOT NULL UNIQUE,
     zone_id INTEGER,
+    checkpoint_id INTEGER,
+    team_id INTEGER,
     reported_by INTEGER,
     incident_type TEXT NOT NULL DEFAULT 'other',
     title TEXT NOT NULL,

@@ -181,11 +181,23 @@ def log_incident():
     title = (request.form.get('title') or '').strip()
     location = (request.form.get('location') or '').strip()
     priority = request.form.get('priority') or 'medium'
-    if not title or not location:
-        flash('Incident title and location are required.', 'error')
+    incident_type = request.form.get('incident_type') or 'other'
+    checkpoint_id = request.form.get('checkpoint_id') or None
+    team_id = request.form.get('team_id') or None
+    if not title:
+        flash('Incident title is required.', 'error')
     else:
-        code = safety_svc.log_incident(title, location, priority, _actor(), _uid())
-        flash(f'Incident {code} queued for response at {location}.', 'success')
+        code = safety_svc.log_incident(
+            title=title,
+            location=location,
+            priority=priority,
+            actor=_actor(),
+            user_id=_uid(),
+            incident_type=incident_type,
+            checkpoint_id=checkpoint_id,
+            team_id=team_id,
+        )
+        flash(f'Incident {code} queued for response.', 'success')
     return redirect(url_for('safety.incidents'))
 
 
@@ -196,10 +208,40 @@ def update_incident():
     code = (request.form.get('code') or '').strip()
     status = (request.form.get('status') or '').strip()
     notes = (request.form.get('notes') or '').strip()
-    if code and status and safety_svc.update_incident(code, status, notes, _actor(), _uid(), current_user.role):
-        flash(f'Incident {code} updated to {status}.', 'success')
+    team_id = request.form.get('team_id')
+    checkpoint_id = request.form.get('checkpoint_id')
+    if code and safety_svc.update_incident(
+        code=code,
+        status=status,
+        notes=notes,
+        actor=_actor(),
+        user_id=_uid(),
+        actor_role=current_user.role,
+        team_id=team_id,
+        checkpoint_id=checkpoint_id,
+    ):
+        flash(f'Incident {code} updated successfully.', 'success')
     else:
         flash('Unable to update incident record.', 'error')
+    return redirect(url_for('safety.incidents'))
+
+
+@safety_bp.route('/incidents/assign-team', methods=['POST'])
+@login_required
+@require_permission('safety.manage')
+def assign_incident_team():
+    code = (request.form.get('code') or '').strip()
+    team_id = request.form.get('team_id')
+    if code and safety_svc.assign_incident_team(
+        code=code,
+        team_id=team_id,
+        actor=_actor(),
+        user_id=_uid(),
+        actor_role=current_user.role,
+    ):
+        flash(f'Team assignment updated for incident {code}.', 'success')
+    else:
+        flash('Unable to assign team to incident.', 'error')
     return redirect(url_for('safety.incidents'))
 
 

@@ -52,6 +52,55 @@ def test_log_and_update_incident(client, app):
         assert row2["status"] == "verified"
 
 
+def test_log_incident_with_checkpoint_and_team(client, app):
+    _login_admin(client, app)
+    with app.app_context():
+        from services.safety_service import log_incident, update_incident, assign_incident_team
+        from models.database import query_one
+        team = query_one("SELECT id, team_name FROM patrol_teams LIMIT 1")
+        cp = query_one("SELECT id, checkpoint_code FROM checkpoints LIMIT 1")
+        team_id = team["id"] if team else None
+        cp_id = cp["id"] if cp else None
+
+        code = log_incident(
+            title="Integrated hazard",
+            location="Main Gate",
+            priority="high",
+            user_id=1,
+            checkpoint_id=cp_id,
+            team_id=team_id,
+        )
+        row = query_one("SELECT * FROM incidents WHERE incident_code=%s", (code,))
+        assert row is not None
+        if team_id:
+            assert row["team_id"] == team_id
+        if cp_id:
+            assert row["checkpoint_id"] == cp_id
+
+        # Admin assigns / changes team
+        assert assign_incident_team(code, team_id, actor_role="admin")
+        row_after = query_one("SELECT * FROM incidents WHERE incident_code=%s", (code,))
+        assert row_after["team_id"] == team_id
+
+
+def test_incident_create_route_with_team_and_checkpoint(client, app):
+    _login_admin(client, app)
+    resp = client.post(
+        "/safety/incidents",
+        data={
+            "title": "Route integrated incident",
+            "location": "Science Building",
+            "priority": "high",
+            "incident_type": "security",
+            "checkpoint_id": "1",
+            "team_id": "1",
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"queued for response" in resp.data or b"Incident" in resp.data
+
+
 def test_incident_create_route(client, app):
     _login_admin(client, app)
     resp = client.post(

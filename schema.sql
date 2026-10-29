@@ -79,9 +79,27 @@ CREATE TABLE IF NOT EXISTS evacuation_plans (
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
+
+
+CREATE TABLE IF NOT EXISTS patrol_teams (
+  id INT AUTO_INCREMENT PRIMARY KEY, team_name VARCHAR(100) NOT NULL UNIQUE,
+  team_lead_id INT NULL, active TINYINT(1) NOT NULL DEFAULT 1,
+  FOREIGN KEY (team_lead_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS patrol_team_members (
+  team_id INT NOT NULL, user_id INT NOT NULL, PRIMARY KEY (team_id, user_id),
+  FOREIGN KEY (team_id) REFERENCES patrol_teams(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS incidents (
   id INT AUTO_INCREMENT PRIMARY KEY,
-  incident_code VARCHAR(30) NOT NULL UNIQUE, zone_id INT NULL, reported_by INT NULL,
+  incident_code VARCHAR(30) NOT NULL UNIQUE,
+  zone_id INT NULL,
+  checkpoint_id INT NULL,
+  team_id INT NULL,
+  reported_by INT NULL,
   incident_type ENUM('security','safety_hazard','medical','fire','earthquake','lockdown','other') NOT NULL DEFAULT 'other',
   title VARCHAR(180) NOT NULL, description TEXT,
   priority ENUM('low','medium','high','critical') NOT NULL DEFAULT 'medium',
@@ -89,9 +107,14 @@ CREATE TABLE IF NOT EXISTS incidents (
   reported_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, verified_at DATETIME NULL,
   resolved_at DATETIME NULL, assigned_to INT NULL,
   FOREIGN KEY (zone_id) REFERENCES campus_zones(id) ON DELETE SET NULL,
+  FOREIGN KEY (checkpoint_id) REFERENCES checkpoints(id) ON DELETE SET NULL,
+  FOREIGN KEY (team_id) REFERENCES patrol_teams(id) ON DELETE SET NULL,
   FOREIGN KEY (reported_by) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
-  INDEX idx_incidents_zone_time (zone_id, reported_at), INDEX idx_incidents_status (status)
+  INDEX idx_incidents_zone_time (zone_id, reported_at),
+  INDEX idx_incidents_checkpoint (checkpoint_id),
+  INDEX idx_incidents_team (team_id),
+  INDEX idx_incidents_status (status)
 );
 
 CREATE TABLE IF NOT EXISTS incident_attachments (
@@ -145,17 +168,7 @@ CREATE TABLE IF NOT EXISTS first_aid_inventory (
   updated_by INT NULL, FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
-CREATE TABLE IF NOT EXISTS patrol_teams (
-  id INT AUTO_INCREMENT PRIMARY KEY, team_name VARCHAR(100) NOT NULL UNIQUE,
-  team_lead_id INT NULL, active TINYINT(1) NOT NULL DEFAULT 1,
-  FOREIGN KEY (team_lead_id) REFERENCES users(id) ON DELETE SET NULL
-);
 
-CREATE TABLE IF NOT EXISTS patrol_team_members (
-  team_id INT NOT NULL, user_id INT NOT NULL, PRIMARY KEY (team_id, user_id),
-  FOREIGN KEY (team_id) REFERENCES patrol_teams(id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
 
 CREATE TABLE IF NOT EXISTS patrol_shifts (
   id INT AUTO_INCREMENT PRIMARY KEY, team_id INT NOT NULL, shift_date DATE NOT NULL,

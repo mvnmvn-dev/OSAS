@@ -12,6 +12,18 @@ def _sqlite_sql(sql):
     sql = re.sub(r"\s+ON DUPLICATE KEY UPDATE.*$", "", sql, flags=re.IGNORECASE | re.DOTALL)
     sql = re.sub(r"\bNOW\(\)", "CURRENT_TIMESTAMP", sql, flags=re.IGNORECASE)
     sql = re.sub(r"\bCURDATE\(\)", "CURRENT_DATE", sql, flags=re.IGNORECASE)
+
+    # Translate MySQL FIELD(col, 'v1', 'v2', ...) to SQLite CASE WHEN col = 'v1' THEN 1 ...
+    def _field_to_case(match):
+        col = match.group(1).strip()
+        raw_vals = match.group(2).split(",")
+        when_clauses = []
+        for idx, val in enumerate(raw_vals):
+            clean_val = val.strip().strip("'\"")
+            when_clauses.append(f"WHEN {col} = '{clean_val}' THEN {idx + 1}")
+        return f"(CASE {' '.join(when_clauses)} ELSE {len(raw_vals) + 1} END)"
+
+    sql = re.sub(r"\bFIELD\s*\(\s*([^,]+)\s*,\s*([^)]+)\)", _field_to_case, sql, flags=re.IGNORECASE)
     return sql
 
 

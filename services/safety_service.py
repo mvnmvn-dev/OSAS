@@ -101,9 +101,18 @@ def _incident_timeline(row):
     events = []
     if row.get("reported_at"):
         events.append({"time": _fmt_time(row["reported_at"]), "text": "Incident reported", "at": row["reported_at"]})
+    if row.get("checkpoint_name"):
+        events.append({"time": _fmt_time(row.get("reported_at")), "text": f"Checkpoint: {row.get('checkpoint_code') or ''} · {row['checkpoint_name']}", "at": row.get("reported_at")})
     if row.get("verified_at"):
         events.append({"time": _fmt_time(row["verified_at"]), "text": "Incident verified", "at": row["verified_at"]})
-    if row.get("assigned_to") and row.get("assignee_name"):
+    if row.get("team_name"):
+        assign_at = row.get("verified_at") or row.get("reported_at")
+        events.append({
+            "time": _fmt_time(assign_at),
+            "text": f"Assigned to {row['team_name']}",
+            "at": assign_at,
+        })
+    elif row.get("assigned_to") and row.get("assignee_name"):
         assign_at = row.get("verified_at") or row.get("reported_at")
         events.append({
             "time": _fmt_time(assign_at),
@@ -389,16 +398,52 @@ def sync_mv_campus_geo():
             execute("UPDATE checkpoints SET active=0 WHERE id=%s", (row["id"],))
     for legacy_zone in ("G2", "QN", "S1", "SCL"):
         execute("UPDATE campus_zones SET active=0 WHERE zone_code=%s", (legacy_zone,))
+    _ensure_incident_schema()
+    cp_ent = query_one("SELECT id FROM checkpoints WHERE checkpoint_code='ENT' LIMIT 1")
+    cp_its = query_one("SELECT id FROM checkpoints WHERE checkpoint_code='ITS' LIMIT 1")
+    cp_pg = query_one("SELECT id FROM checkpoints WHERE checkpoint_code='PG' LIMIT 1")
+    team_a = query_one("SELECT id FROM patrol_teams WHERE team_name='Team Alpha' LIMIT 1")
+    team_b = query_one("SELECT id FROM patrol_teams WHERE team_name='Team Bravo' LIMIT 1")
+    if cp_ent and team_a:
+        execute("UPDATE incidents SET checkpoint_id=%s, team_id=%s WHERE incident_code='INC-24091' AND team_id IS NULL", (cp_ent["id"], team_a["id"]))
+    if cp_its and team_b:
+        execute("UPDATE incidents SET checkpoint_id=%s, team_id=%s WHERE incident_code='INC-24090' AND team_id IS NULL", (cp_its["id"], team_b["id"]))
+    if cp_pg and team_a:
+        execute("UPDATE incidents SET checkpoint_id=%s, team_id=%s WHERE incident_code='INC-24089' AND team_id IS NULL", (cp_pg["id"], team_a["id"]))
+
+
+def _ensure_incident_schema():
+    """Ensure incidents table has checkpoint_id and team_id columns in runtime database."""
+    try:
+        is_testing = current_app.config.get("TESTING")
+        if is_testing:
+            info = query_all("PRAGMA table_info(incidents)")
+            cols = {r["name"] for r in info} if info else set()
+        else:
+            info = query_all("SHOW COLUMNS FROM incidents")
+            cols = {r["Field"] for r in info} if info else set()
+        if "checkpoint_id" not in cols:
+            execute("ALTER TABLE incidents ADD COLUMN checkpoint_id INT NULL")
+        if "team_id" not in cols:
+            execute("ALTER TABLE incidents ADD COLUMN team_id INT NULL")
+    except Exception:
+        pass
 
 
 def ensure_campus_seed():
     """Insert baseline campus geography if the DB is empty."""
+    _ensure_incident_schema()
     if current_app.config.get("TESTING"):
         if not query_one("SELECT id FROM campus_zones LIMIT 1"):
             execute(
                 "INSERT INTO campus_zones (zone_code, zone_name, zone_type, risk_score) VALUES (%s,%s,%s,%s)",
                 ("ZA", "Zone A · Main Gate & Visitor Entrance", "gate", 90),
             )
+        if not query_one("SELECT id FROM patrol_teams LIMIT 1"):
+            execute("INSERT INTO patrol_teams (team_name, active) VALUES ('Team Alpha', 1)")
+            execute("INSERT INTO patrol_teams (team_name, active) VALUES ('Team Bravo', 1)")
+        if not query_one("SELECT id FROM checkpoints LIMIT 1"):
+            execute("INSERT INTO checkpoints (checkpoint_code, checkpoint_name, zone_id, scan_token) VALUES ('ENT', 'Main Gate Entrance', 1, 'tok-ent-test')")
         return True
 
     if query_one("SELECT id FROM buildings LIMIT 1"):
@@ -434,20 +479,26 @@ def ensure_campus_seed():
     execute("INSERT INTO patrol_teams (team_name, team_lead_id, active) VALUES (%s,%s,1)", ("Team Alpha", lead_id))
     execute("INSERT INTO patrol_teams (team_name, team_lead_id, active) VALUES (%s,%s,1)", ("Team Bravo", lead_id))
 
+    team_a = query_one("SELECT id FROM patrol_teams WHERE team_name='Team Alpha' LIMIT 1")
+    team_b = query_one("SELECT id FROM patrol_teams WHERE team_name='Team Bravo' LIMIT 1")
+    cp_ent = query_one("SELECT id FROM checkpoints WHERE checkpoint_code='ENT' LIMIT 1")
+    cp_its = query_one("SELECT id FROM checkpoints WHERE checkpoint_code='ITS' LIMIT 1")
+    cp_pg = query_one("SELECT id FROM checkpoints WHERE checkpoint_code='PG' LIMIT 1")
+
     execute(
-        """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
-           VALUES (%s,%s,%s,'security',%s,%s,'high','responding')""",
-        ("INC-24091", zmap["ZA"], lead_id, "Unauthorized access attempt", "Attempted entry without ID at Main Gate · Topaz / Sapphire"),
+        """INSERT INTO incidents (incident_code, zone_id, checkpoint_id, team_id, reported_by, incident_type, title, description, priority, status)
+           VALUES (%s,%s,%s,%s,%s,'security',%s,%s,'high','responding')""",
+        ("INC-24091", zmap["ZA"], cp_ent["id"] if cp_ent else None, team_a["id"] if team_a else None, lead_id, "Unauthorized access attempt", "Attempted entry without ID at Main Gate · Topaz / Sapphire"),
     )
     execute(
-        """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
-           VALUES (%s,%s,%s,'safety_hazard',%s,%s,'medium','verified')""",
-        ("INC-24090", zmap["ZC"], lead_id, "Wet floor reported", "Spill on Science Laboratory Wing corridor"),
+        """INSERT INTO incidents (incident_code, zone_id, checkpoint_id, team_id, reported_by, incident_type, title, description, priority, status)
+           VALUES (%s,%s,%s,%s,%s,'safety_hazard',%s,%s,'medium','verified')""",
+        ("INC-24090", zmap["ZC"], cp_its["id"] if cp_its else None, team_b["id"] if team_b else None, lead_id, "Wet floor reported", "Spill on Science Laboratory Wing corridor"),
     )
     execute(
-        """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
-           VALUES (%s,%s,%s,'medical',%s,%s,'high','resolved')""",
-        ("INC-24089", zmap["ZD"], lead_id, "Medical assistance requested", "Student required first aid in Student Center lobby"),
+        """INSERT INTO incidents (incident_code, zone_id, checkpoint_id, team_id, reported_by, incident_type, title, description, priority, status)
+           VALUES (%s,%s,%s,%s,%s,'medical',%s,%s,'high','resolved')""",
+        ("INC-24089", zmap["ZD"], cp_pg["id"] if cp_pg else None, team_a["id"] if team_a else None, lead_id, "Medical assistance requested", "Student required first aid in Student Center lobby"),
     )
 
     execute(
@@ -498,11 +549,17 @@ def ensure_campus_seed():
 
 
 def _incident_rows():
+    _ensure_incident_schema()
     rows = query_all(
         """
-        SELECT i.*, z.zone_name, u.full_name AS assignee_name
+        SELECT i.*, z.zone_name, z.zone_code,
+               c.checkpoint_code, c.checkpoint_name,
+               pt.team_name,
+               u.full_name AS assignee_name
         FROM incidents i
         LEFT JOIN campus_zones z ON z.id = i.zone_id
+        LEFT JOIN checkpoints c ON c.id = i.checkpoint_id
+        LEFT JOIN patrol_teams pt ON pt.id = i.team_id
         LEFT JOIN users u ON u.id = i.assigned_to
         ORDER BY
             FIELD(i.priority, 'critical', 'high', 'medium', 'low'),
@@ -522,14 +579,19 @@ def _incident_rows():
             "closed": "Closed",
         }.get((r.get("status") or "").lower(), label)
         location = r.get("zone_name")
-        if not location:
+        if r.get("checkpoint_name"):
+            location = f"{r['checkpoint_name']} ({r.get('zone_name') or 'Zone'})" if r.get("zone_name") else r["checkpoint_name"]
+        elif not location:
             desc = (r.get("description") or "").split("\n")[0].strip()
             location = desc[:80] if desc else "Unspecified zone"
+
+        assigned_team = r.get("team_name") or r.get("assignee_name") or "Unassigned"
         out.append({
             "id": r["id"],
             "code": r["incident_code"],
             "title": r["title"],
             "location": location,
+            "raw_location": (r.get("description") or "").split("\n")[0].strip(),
             "time": _fmt_time(r.get("reported_at")),
             "reported_full": _fmt_datetime(r.get("reported_at")),
             "status": label,
@@ -539,8 +601,14 @@ def _incident_rows():
             "priority": (r.get("priority") or "medium").lower(),
             "priority_label": p_label,
             "priority_class": p_css,
-            "team": r.get("assignee_name"),
+            "team": assigned_team,
+            "team_id": r.get("team_id"),
+            "team_name": r.get("team_name"),
+            "checkpoint_id": r.get("checkpoint_id"),
+            "checkpoint_code": r.get("checkpoint_code"),
+            "checkpoint_name": r.get("checkpoint_name"),
             "zone_id": r.get("zone_id"),
+            "zone_name": r.get("zone_name"),
             "timeline": _incident_timeline(r),
             "updated_ago": _relative_ago(r.get("resolved_at") or r.get("verified_at") or r.get("reported_at")),
         })
@@ -552,7 +620,8 @@ def _checkpoint_rows():
     rows = query_all(
         """
         SELECT c.*, z.zone_name, z.zone_code,
-               (SELECT MAX(pl.scanned_at) FROM patrol_logs pl WHERE pl.checkpoint_id = c.id) AS last_scan
+               (SELECT MAX(pl.scanned_at) FROM patrol_logs pl WHERE pl.checkpoint_id = c.id) AS last_scan,
+               (SELECT COUNT(*) FROM incidents i WHERE (i.checkpoint_id = c.id OR (i.checkpoint_id IS NULL AND i.zone_id = c.zone_id)) AND i.status NOT IN ('resolved', 'closed')) AS open_incidents
         FROM checkpoints c
         JOIN campus_zones z ON z.id = c.zone_id
         WHERE c.active = 1
@@ -596,6 +665,7 @@ def _checkpoint_rows():
             "patrol_status_ok": on_schedule,
             "history": history,
             "risk_level": official_risk.upper(),
+            "open_incidents": r.get("open_incidents") or 0,
         })
     return out
 
@@ -905,7 +975,8 @@ def get_safety_dashboard(section="overview", status_filter=None):
         """
         SELECT t.*, u.full_name AS lead_name,
                (SELECT COUNT(*) FROM patrol_team_members m WHERE m.team_id = t.id) AS members,
-               (SELECT COUNT(*) FROM patrol_shifts s WHERE s.team_id = t.id AND s.status = 'active') AS active_shifts
+               (SELECT COUNT(*) FROM patrol_shifts s WHERE s.team_id = t.id AND s.status = 'active') AS active_shifts,
+               (SELECT COUNT(*) FROM incidents i WHERE i.team_id = t.id AND i.status NOT IN ('resolved', 'closed')) AS active_incidents
         FROM patrol_teams t
         LEFT JOIN users u ON u.id = t.team_lead_id
         WHERE t.active = 1
@@ -916,6 +987,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
     for t in teams_raw:
         on_duty = t["active_shifts"] > 0
         members = t["members"] or 3
+        active_inc = t.get("active_incidents") or 0
         teams.append({
             "id": t["id"],
             "name": t["team_name"],
@@ -924,6 +996,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
             "status": "On duty" if on_duty else "Scheduled",
             "status_class": "success" if on_duty else "warning",
             "shift": "Active shift" if on_duty else "Standby",
+            "active_incidents": active_inc,
         })
 
     inspections_raw = query_all(
@@ -1401,54 +1474,203 @@ def _next_code(prefix, table, column):
     return f"{prefix}{datetime.now().year}-{num:03d}"
 
 
-def log_incident(title, location, priority="medium", actor="OSAS Administrator", user_id=None, incident_type="other"):
+def log_incident(
+    title,
+    location="",
+    priority="medium",
+    actor="OSAS Administrator",
+    user_id=None,
+    incident_type="other",
+    checkpoint_id=None,
+    team_id=None,
+):
     ensure_campus_seed()
-    zone = query_one(
-        """SELECT id, zone_name FROM campus_zones
-           WHERE zone_name LIKE %s OR zone_code LIKE %s LIMIT 1""",
-        (f"%{location}%", f"%{location}%"),
-    )
+
+    # Resolve checkpoint if provided or by location match
+    cp = None
+    if checkpoint_id:
+        try:
+            cp = query_one(
+                "SELECT id, zone_id, checkpoint_code, checkpoint_name FROM checkpoints WHERE id=%s OR checkpoint_code=%s LIMIT 1",
+                (checkpoint_id, str(checkpoint_id).upper()),
+            )
+        except Exception:
+            cp = None
+    if not cp and location:
+        cp = query_one(
+            "SELECT id, zone_id, checkpoint_code, checkpoint_name FROM checkpoints WHERE checkpoint_code=%s OR checkpoint_name LIKE %s LIMIT 1",
+            (location.upper().strip(), f"%{location}%"),
+        )
+    resolved_cp_id = cp["id"] if cp else None
+
+    # Resolve zone: from checkpoint first, else from location
+    zone = None
+    if cp and cp.get("zone_id"):
+        zone = query_one("SELECT id, zone_name FROM campus_zones WHERE id=%s", (cp["zone_id"],))
+    if not zone and location:
+        zone = query_one(
+            """SELECT id, zone_name FROM campus_zones
+               WHERE zone_name LIKE %s OR zone_code LIKE %s LIMIT 1""",
+            (f"%{location}%", f"%{location}%"),
+        )
+    resolved_zone_id = zone["id"] if zone else None
+
+    # Resolve team assignment
+    resolved_team_id = None
+    resolved_assigned_to = None
+    team_name = None
+    if team_id:
+        try:
+            t = query_one(
+                "SELECT id, team_name, team_lead_id FROM patrol_teams WHERE id=%s OR team_name=%s LIMIT 1",
+                (team_id, team_id),
+            )
+            if t:
+                resolved_team_id = t["id"]
+                resolved_assigned_to = t.get("team_lead_id")
+                team_name = t["team_name"]
+        except Exception:
+            pass
+
     code = _next_code("INC-", "incidents", "incident_code")
+    loc_desc = location or (f"{cp['checkpoint_name']} ({cp['checkpoint_code']})" if cp else "Campus")
+
     iid, _ = execute(
-        """INSERT INTO incidents (incident_code, zone_id, reported_by, incident_type, title, description, priority, status)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,'reported')""",
-        (code, zone["id"] if zone else None, user_id, incident_type, title, location, priority),
+        """INSERT INTO incidents (incident_code, zone_id, checkpoint_id, team_id, reported_by, incident_type, title, description, priority, status, assigned_to)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'reported',%s)""",
+        (code, resolved_zone_id, resolved_cp_id, resolved_team_id, user_id, incident_type, title, loc_desc, priority, resolved_assigned_to),
     )
-    write_audit("Incident logged", "incident", iid, new_values={"code": code, "title": title, "location": location})
-    notify_staff("New incident reported", f"{code}: {title} · {location}", "danger", "/safety/incidents")
+
+    audit_vals = {"code": code, "title": title, "location": loc_desc}
+    if resolved_team_id:
+        audit_vals["team_id"] = resolved_team_id
+        audit_vals["team_name"] = team_name
+    if resolved_cp_id:
+        audit_vals["checkpoint_id"] = resolved_cp_id
+    write_audit("Incident logged", "incident", iid, new_values=audit_vals)
+
+    msg_detail = f"{code}: {title} · {loc_desc}"
+    if team_name:
+        msg_detail += f" (Assigned: {team_name})"
+    notify_staff("New incident reported", msg_detail, "danger", "/safety/incidents")
+
     if not current_app.config.get("TESTING"):
         risk_scoring.refresh_all_risk_scores()
     return code
 
 
-def update_incident(code, status, notes="", actor="OSAS Administrator", user_id=None, actor_role=None):
-    status = (status or "").lower()
-    row = query_one("SELECT * FROM incidents WHERE incident_code=%s", (code,))
+def update_incident(
+    code,
+    status=None,
+    notes="",
+    actor="OSAS Administrator",
+    user_id=None,
+    actor_role=None,
+    team_id=None,
+    checkpoint_id=None,
+):
+    ensure_campus_seed()
+    row = query_one(
+        """
+        SELECT i.*, pt.team_name, c.checkpoint_name, c.checkpoint_code
+        FROM incidents i
+        LEFT JOIN patrol_teams pt ON pt.id = i.team_id
+        LEFT JOIN checkpoints c ON c.id = i.checkpoint_id
+        WHERE i.incident_code = %s
+        """,
+        (code,),
+    )
     if not row:
         return False
-    valid, _reason = validate_incident_transition(row["status"], status, actor_role, notes)
-    if not valid:
-        return False
-    extras = ""
-    params = [status]
-    if status == "verified":
-        extras = ", verified_at=NOW()"
-    if status in ("resolved", "closed"):
-        extras += ", resolved_at=NOW()"
+
+    current_status = row["status"]
+    next_status = (status or current_status or "").lower()
+
+    if next_status != current_status:
+        valid, _reason = validate_incident_transition(current_status, next_status, actor_role, notes)
+        if not valid:
+            return False
+
+    updates = ["status=%s"]
+    params = [next_status]
+
+    if next_status == "verified" and not row.get("verified_at"):
+        updates.append("verified_at=NOW()")
+    if next_status in ("resolved", "closed") and not row.get("resolved_at"):
+        updates.append("resolved_at=NOW()")
+
+    assigned_team_name = None
+    if team_id is not None:
+        raw_team_id = str(team_id).strip()
+        if raw_team_id in ("", "0", "none", "null"):
+            updates.append("team_id=NULL")
+            updates.append("assigned_to=NULL")
+        else:
+            team_row = query_one(
+                "SELECT id, team_name, team_lead_id FROM patrol_teams WHERE id=%s OR team_name=%s LIMIT 1",
+                (raw_team_id, raw_team_id),
+            )
+            if team_row:
+                updates.append("team_id=%s")
+                params.append(team_row["id"])
+                updates.append("assigned_to=%s")
+                params.append(team_row.get("team_lead_id"))
+                assigned_team_name = team_row["team_name"]
+
+    if checkpoint_id is not None:
+        raw_cp_id = str(checkpoint_id).strip()
+        if raw_cp_id in ("", "0", "none", "null"):
+            updates.append("checkpoint_id=NULL")
+        else:
+            cp_row = query_one(
+                "SELECT id, zone_id, checkpoint_code, checkpoint_name FROM checkpoints WHERE id=%s OR checkpoint_code=%s LIMIT 1",
+                (raw_cp_id, raw_cp_id.upper()),
+            )
+            if cp_row:
+                updates.append("checkpoint_id=%s")
+                params.append(cp_row["id"])
+                if cp_row.get("zone_id"):
+                    updates.append("zone_id=%s")
+                    params.append(cp_row["zone_id"])
+
+    log_notes = []
+    if assigned_team_name and assigned_team_name != row.get("team_name"):
+        log_notes.append(f"Assigned patrol team: {assigned_team_name}")
     if notes:
-        extras += ", description=CONCAT(COALESCE(description, ''), %s)"
-        params.append(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {notes}")
+        log_notes.append(notes)
+
+    if log_notes:
+        combined_note = " · ".join(log_notes)
+        updates.append("description=CONCAT(COALESCE(description, ''), %s)")
+        params.append(f"\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {combined_note}")
+
     params.append(code)
-    execute(f"UPDATE incidents SET status=%s{extras} WHERE incident_code=%s", tuple(params))
-    write_audit("Incident updated", "incident", row["id"], old_values={"status": row["status"]}, new_values={"status": status, "notes": notes})
-    tone = "success" if status in ("resolved", "closed") else ("warning" if status == "responding" else "info")
+    execute(f"UPDATE incidents SET {', '.join(updates)} WHERE incident_code=%s", tuple(params))
+
+    audit_old = {"status": current_status, "team_id": row.get("team_id")}
+    audit_new = {"status": next_status, "notes": notes}
+    if assigned_team_name:
+        audit_new["assigned_team"] = assigned_team_name
+    write_audit("Incident updated", "incident", row["id"], old_values=audit_old, new_values=audit_new)
+
+    tone = "success" if next_status in ("resolved", "closed") else ("warning" if next_status == "responding" else "info")
+    notif_msg = f"{row.get('title') or code} status: {next_status}"
+    if assigned_team_name:
+        notif_msg += f" · Assigned to {assigned_team_name}"
     notify_staff(
-        f"Incident {code} → {status.replace('_', ' ').title()}",
-        f"{row.get('title') or code} moved from {row['status']} to {status}",
+        f"Incident {code} Updated",
+        notif_msg,
         tone,
         "/safety/incidents",
     )
+    if not current_app.config.get("TESTING"):
+        risk_scoring.refresh_all_risk_scores()
     return True
+
+
+def assign_incident_team(code, team_id, actor="OSAS Administrator", user_id=None, actor_role=None):
+    """Explicit team assignment helper for incidents."""
+    return update_incident(code=code, team_id=team_id, actor=actor, user_id=user_id, actor_role=actor_role)
 
 
 def create_inspection(zone, insp_type, date_label, actor="OSAS Administrator", user_id=None):
@@ -1771,9 +1993,20 @@ def export_report(report_type, date_range, fmt, actor="OSAS Administrator", user
     rows = []
     headers = []
     if "incident" in safe_type:
-        headers = ["Code", "Title", "Status", "Priority", "Reported"]
-        for r in query_all("SELECT incident_code, title, status, priority, reported_at FROM incidents ORDER BY reported_at DESC"):
-            rows.append([r["incident_code"], r["title"], r["status"], r["priority"], str(r["reported_at"])])
+        headers = ["Code", "Title", "Status", "Priority", "Reported", "Checkpoint", "Assigned Team"]
+        for r in query_all(
+            """
+            SELECT i.incident_code, i.title, i.status, i.priority, i.reported_at,
+                   COALESCE(c.checkpoint_name, 'None') AS checkpoint_name,
+                   COALESCE(pt.team_name, u.full_name, 'Unassigned') AS team_name
+            FROM incidents i
+            LEFT JOIN checkpoints c ON c.id = i.checkpoint_id
+            LEFT JOIN patrol_teams pt ON pt.id = i.team_id
+            LEFT JOIN users u ON u.id = i.assigned_to
+            ORDER BY i.reported_at DESC
+            """
+        ):
+            rows.append([r["incident_code"], r["title"], r["status"], r["priority"], str(r["reported_at"]), r["checkpoint_name"], r["team_name"]])
     elif "patrol" in safe_type:
         headers = ["Route", "Engine", "Distance_m", "Duration_s", "Status"]
         for r in query_all("SELECT route_name, routing_engine, distance_meters, duration_seconds, status FROM patrol_routes ORDER BY created_at DESC"):
