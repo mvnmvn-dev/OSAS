@@ -465,7 +465,14 @@
         {% for item in safety.inspections %}
         <div class="safety-row">
             <div class="incident-icon"><i class="fas {{ item.icon }}"></i></div>
-            <div class="safety-row-main"><strong>{{ item.code }} · {{ item.zone }}</strong><span>{{ item.type }} · {{ item.due }}</span></div>
+            <div class="safety-row-main">
+                <strong>{{ item.code }} · {{ item.zone }}</strong>
+                <span>
+                    {{ item.type }} · {{ item.due }}
+                    {% if item.team_name %} · <i class="fas fa-user-shield"></i> {{ item.team_name }}{% endif %}
+                    {% if item.checkpoint_name %} · <i class="fas fa-location-crosshairs"></i> {{ item.checkpoint_code or '' }} {{ item.checkpoint_name }}{% endif %}
+                </span>
+            </div>
             <span class="status-badge status-{{ item.status_class }}">{{ item.status }}</span>
         </div>
         {% else %}
@@ -519,7 +526,15 @@
         {% for drill in safety.drills %}
         <div class="safety-row">
             <div class="incident-icon"><i class="fas {{ drill.icon }}"></i></div>
-            <div class="safety-row-main"><strong>{{ drill.title }}</strong><span>{{ drill.schedule }}</span></div>
+            <div class="safety-row-main">
+                <strong>{{ drill.title }}</strong>
+                <span>
+                    {{ drill.schedule }}
+                    {% if drill.team_name %} · <i class="fas fa-user-shield"></i> {{ drill.team_name }}{% endif %}
+                    {% if drill.checkpoint_name %} · <i class="fas fa-location-crosshairs"></i> {{ drill.checkpoint_code or '' }} {{ drill.checkpoint_name }}{% endif %}
+                    {% if drill.inspection_code %} · <i class="fas fa-clipboard-check"></i> {{ drill.inspection_code }}{% endif %}
+                </span>
+            </div>
             <span class="status-badge status-{{ drill.status_class }}">{{ drill.status }}</span>
         </div>
         {% else %}
@@ -643,7 +658,11 @@
             <div class="incident-icon"><i class="fas {{ item.icon }}"></i></div>
             <div class="safety-row-main">
                 <strong>{{ item.code }} · {{ item.zone }}</strong>
-                <span>{{ item.type }} · Due: {{ item.due }}</span>
+                <span>
+                    {{ item.type }} · Due: {{ item.due }}
+                    {% if item.team_name %} · <i class="fas fa-user-shield"></i> {{ item.team_name }}{% endif %}
+                    {% if item.checkpoint_name %} · <i class="fas fa-location-crosshairs"></i> {{ item.checkpoint_code or '' }} {{ item.checkpoint_name }}{% endif %}
+                </span>
             </div>
             <span class="status-badge status-{{ item.status_class }}">{{ item.status }}</span>
         </div>
@@ -1174,7 +1193,7 @@
         <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
         <span class="eyebrow"><i class="fas fa-clipboard-check"></i> Inspections and Risks</span>
         <h2>Schedule Safety Inspection</h2>
-        <p class="modal-subtitle">Log a routine compliance or safety hazard inspection</p>
+        <p class="modal-subtitle">Log a routine compliance or safety hazard inspection linked to teams and checkpoints</p>
         <form method="POST" action="{{ url_for('safety.create_inspection') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label><i class="fas fa-location-dot"></i> Campus Zone or Building
@@ -1185,12 +1204,28 @@
                 <option value="{{ cp.name }}">{{ cp.code }} · {{ cp.zone_name }}</option>
                 {% endfor %}
             </datalist>
+            <label><i class="fas fa-location-crosshairs"></i> Inspected Checkpoint
+                <select name="checkpoint_id">
+                    <option value="">— Select Checkpoint (Optional) —</option>
+                    {% for cp in safety.all_checkpoints %}
+                    <option value="{{ cp.id }}">{{ cp.code }} · {{ cp.name }} ({{ cp.zone_name }})</option>
+                    {% endfor %}
+                </select>
+            </label>
             <label><i class="fas fa-list-check"></i> Inspection Type
                 <select name="type">
                     <option>Fire safety</option>
                     <option>Access control</option>
                     <option>First aid and supplies</option>
                     <option>General safety</option>
+                </select>
+            </label>
+            <label><i class="fas fa-users-gear"></i> Assigned Inspection Team
+                <select name="team_id">
+                    <option value="">— Unassigned (Standby) —</option>
+                    {% for team in safety.teams_options %}
+                    <option value="{{ team.id }}">{{ team.name }} (Lead: {{ team.lead }} · {{ team.status }})</option>
+                    {% endfor %}
                 </select>
             </label>
             <label><i class="fas fa-calendar"></i> Scheduled Date
@@ -1210,7 +1245,7 @@
         <button class="modal-close" data-close-modal type="button" aria-label="Close modal"><i class="fas fa-xmark"></i></button>
         <span class="eyebrow"><i class="fas fa-person-running"></i> Emergency Preparedness</span>
         <h2>Schedule Emergency Drill</h2>
-        <p class="modal-subtitle">Plan a university-wide or building drill to boost response readiness</p>
+        <p class="modal-subtitle">Plan a campus drill integrated with response teams, muster checkpoints, and inspections</p>
         <form method="POST" action="{{ url_for('safety.create_drill') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <label><i class="fas fa-heading"></i> Drill Title
@@ -1222,6 +1257,30 @@
                     <option>Earthquake</option>
                     <option>Lockdown</option>
                     <option>Medical</option>
+                </select>
+            </label>
+            <label><i class="fas fa-users-shield"></i> Lead Response Team
+                <select name="team_id">
+                    <option value="">— Unassigned (Standby) —</option>
+                    {% for team in safety.teams_options %}
+                    <option value="{{ team.id }}">{{ team.name }} (Lead: {{ team.lead }} · {{ team.status }})</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label><i class="fas fa-location-crosshairs"></i> Assembly / Staging Checkpoint
+                <select name="checkpoint_id">
+                    <option value="">— Select Checkpoint (Optional) —</option>
+                    {% for cp in safety.all_checkpoints %}
+                    <option value="{{ cp.id }}">{{ cp.code }} · {{ cp.name }} ({{ cp.zone_name }})</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <label><i class="fas fa-clipboard-check"></i> Linked Readiness Inspection
+                <select name="inspection_id">
+                    <option value="">— None / Unlinked —</option>
+                    {% for item in safety.inspections %}
+                    <option value="{{ item.id }}">{{ item.code }} · {{ item.zone }} ({{ item.type }})</option>
+                    {% endfor %}
                 </select>
             </label>
             <label><i class="fas fa-clock"></i> Scheduled Date & Time

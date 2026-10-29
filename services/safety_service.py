@@ -417,7 +417,7 @@ def sync_mv_campus_geo():
 
 
 def _ensure_incident_schema():
-    """Ensure incidents and patrol_teams have extended columns in runtime database."""
+    """Ensure incidents, patrol_teams, drills, and safety_inspections have extended columns in runtime database."""
     try:
         is_testing = current_app.config.get("TESTING")
         if is_testing:
@@ -425,11 +425,19 @@ def _ensure_incident_schema():
             cols = {r["name"] for r in info} if info else set()
             team_info = query_all("PRAGMA table_info(patrol_teams)")
             team_cols = {r["name"] for r in team_info} if team_info else set()
+            drill_info = query_all("PRAGMA table_info(drills)")
+            drill_cols = {r["name"] for r in drill_info} if drill_info else set()
+            insp_info = query_all("PRAGMA table_info(safety_inspections)")
+            insp_cols = {r["name"] for r in insp_info} if insp_info else set()
         else:
             info = query_all("SHOW COLUMNS FROM incidents")
             cols = {r["Field"] for r in info} if info else set()
             team_info = query_all("SHOW COLUMNS FROM patrol_teams")
             team_cols = {r["Field"] for r in team_info} if team_info else set()
+            drill_info = query_all("SHOW COLUMNS FROM drills")
+            drill_cols = {r["Field"] for r in drill_info} if drill_info else set()
+            insp_info = query_all("SHOW COLUMNS FROM safety_inspections")
+            insp_cols = {r["Field"] for r in insp_info} if insp_info else set()
 
         if "checkpoint_id" not in cols:
             try:
@@ -444,6 +452,33 @@ def _ensure_incident_schema():
         if "lead_name" not in team_cols:
             try:
                 execute("ALTER TABLE patrol_teams ADD COLUMN lead_name VARCHAR(150) NULL")
+            except Exception:
+                pass
+
+        if "team_id" not in drill_cols:
+            try:
+                execute("ALTER TABLE drills ADD COLUMN team_id INT NULL")
+            except Exception:
+                pass
+        if "checkpoint_id" not in drill_cols:
+            try:
+                execute("ALTER TABLE drills ADD COLUMN checkpoint_id INT NULL")
+            except Exception:
+                pass
+        if "inspection_id" not in drill_cols:
+            try:
+                execute("ALTER TABLE drills ADD COLUMN inspection_id INT NULL")
+            except Exception:
+                pass
+
+        if "checkpoint_id" not in insp_cols:
+            try:
+                execute("ALTER TABLE safety_inspections ADD COLUMN checkpoint_id INT NULL")
+            except Exception:
+                pass
+        if "team_id" not in insp_cols:
+            try:
+                execute("ALTER TABLE safety_inspections ADD COLUMN team_id INT NULL")
             except Exception:
                 pass
     except Exception:
@@ -1022,9 +1057,11 @@ def get_safety_dashboard(section="overview", status_filter=None):
 
     inspections_raw = query_all(
         """
-        SELECT si.*, z.zone_name
+        SELECT si.*, z.zone_name, t.team_name, cp.checkpoint_code, cp.checkpoint_name
         FROM safety_inspections si
         JOIN campus_zones z ON z.id = si.zone_id
+        LEFT JOIN patrol_teams t ON t.id = si.team_id
+        LEFT JOIN checkpoints cp ON cp.id = si.checkpoint_id
         ORDER BY si.scheduled_date DESC
         """
     )
@@ -1042,6 +1079,11 @@ def get_safety_dashboard(section="overview", status_filter=None):
             "status": label,
             "status_class": css,
             "icon": "fa-wrench" if css == "danger" else "fa-clipboard-check",
+            "team_id": r.get("team_id"),
+            "team_name": r.get("team_name"),
+            "checkpoint_id": r.get("checkpoint_id"),
+            "checkpoint_code": r.get("checkpoint_code"),
+            "checkpoint_name": r.get("checkpoint_name"),
         })
 
     actions = []
@@ -1063,7 +1105,16 @@ def get_safety_dashboard(section="overview", status_filter=None):
         })
 
     drills = []
-    for d in query_all("SELECT * FROM drills ORDER BY scheduled_at DESC"):
+    for d in query_all(
+        """
+        SELECT d.*, t.team_name, cp.checkpoint_code, cp.checkpoint_name, si.inspection_code
+        FROM drills d
+        LEFT JOIN patrol_teams t ON t.id = d.team_id
+        LEFT JOIN checkpoints cp ON cp.id = d.checkpoint_id
+        LEFT JOIN safety_inspections si ON si.id = d.inspection_id
+        ORDER BY d.scheduled_at DESC
+        """
+    ):
         label, css = _title_status(d["status"])
         icon = {"fire": "fa-fire", "earthquake": "fa-house-chimney", "lockdown": "fa-lock", "medical": "fa-kit-medical"}.get(d["drill_type"], "fa-person-running")
         drills.append({
@@ -1074,6 +1125,13 @@ def get_safety_dashboard(section="overview", status_filter=None):
             "status": label,
             "status_class": css,
             "icon": icon,
+            "team_id": d.get("team_id"),
+            "team_name": d.get("team_name"),
+            "checkpoint_id": d.get("checkpoint_id"),
+            "checkpoint_code": d.get("checkpoint_code"),
+            "checkpoint_name": d.get("checkpoint_name"),
+            "inspection_id": d.get("inspection_id"),
+            "inspection_code": d.get("inspection_code"),
         })
 
     plans = []
@@ -1694,33 +1752,92 @@ def assign_incident_team(code, team_id, actor="OSAS Administrator", user_id=None
     return update_incident(code=code, team_id=team_id, actor=actor, user_id=user_id, actor_role=actor_role)
 
 
-def create_inspection(zone, insp_type, date_label, actor="OSAS Administrator", user_id=None):
+def create_inspection(zone, insp_type, date_label, actor="OSAS Administrator", user_id=None, team_id=None, checkpoint_id=None):
+    _ensure_incident_schema()
     ensure_campus_seed()
-    z = query_one("SELECT id FROM campus_zones WHERE zone_name LIKE %s OR zone_code LIKE %s LIMIT 1", (f"%{zone}%", f"%{zone}%"))
+
+    resolved_cp_id = None
+    if checkpoint_id:
+        try:
+            cp_row = query_one("SELECT id, zone_id FROM checkpoints WHERE id=%s OR checkpoint_code=%s LIMIT 1", (checkpoint_id, checkpoint_id))
+            if cp_row:
+                resolved_cp_id = cp_row["id"]
+        except Exception:
+            pass
+
+    z = query_one("SELECT id FROM campus_zones WHERE zone_name LIKE %s OR zone_code LIKE %s LIMIT 1", (f"%{zone}%", f"%{zone}%")) if zone else None
+    if not z and resolved_cp_id:
+        cp_zone = query_one("SELECT zone_id FROM checkpoints WHERE id=%s", (resolved_cp_id,))
+        if cp_zone and cp_zone.get("zone_id"):
+            z = {"id": cp_zone["zone_id"]}
     if not z:
         z = query_one("SELECT id FROM campus_zones ORDER BY id LIMIT 1")
+
+    resolved_team_id = None
+    if team_id:
+        try:
+            t = query_one("SELECT id FROM patrol_teams WHERE id=%s OR team_name=%s LIMIT 1", (team_id, team_id))
+            if t:
+                resolved_team_id = t["id"]
+        except Exception:
+            pass
+
     last = query_one("SELECT id FROM safety_inspections ORDER BY id DESC LIMIT 1")
     code = f"INS-{datetime.now().year}-{(last['id'] if last else 0) + 1:03d}"
     iid, _ = execute(
-        """INSERT INTO safety_inspections (inspection_code, zone_id, inspector_id, scheduled_date, status, notes)
-           VALUES (%s,%s,%s,%s,'scheduled',%s)""",
-        (code, z["id"], user_id, date_label or datetime.now().date().isoformat(), insp_type),
+        """INSERT INTO safety_inspections (inspection_code, zone_id, checkpoint_id, team_id, inspector_id, scheduled_date, status, notes)
+           VALUES (%s,%s,%s,%s,%s,%s,'scheduled',%s)""",
+        (code, z["id"] if z else 1, resolved_cp_id, resolved_team_id, user_id, date_label or datetime.now().date().isoformat(), insp_type),
     )
-    write_audit("Inspection created", "inspection", iid, new_values={"code": code, "zone": zone})
+    write_audit("Inspection created", "inspection", iid, new_values={
+        "code": code, "zone": zone, "checkpoint_id": resolved_cp_id, "team_id": resolved_team_id
+    })
     notify_staff("Inspection scheduled", f"{code}: {insp_type} · {zone}", "info", "/safety/inspections")
     return code
 
 
-def create_drill(title, drill_type, scheduled_at, actor="OSAS Administrator", user_id=None):
+def create_drill(title, drill_type, scheduled_at, actor="OSAS Administrator", user_id=None, team_id=None, checkpoint_id=None, inspection_id=None):
+    _ensure_incident_schema()
     dtype = (drill_type or "other").lower()
     if dtype not in ("fire", "earthquake", "lockdown", "medical", "other"):
         dtype = "other"
+
+    resolved_team_id = None
+    if team_id:
+        try:
+            t = query_one("SELECT id FROM patrol_teams WHERE id=%s OR team_name=%s LIMIT 1", (team_id, team_id))
+            if t:
+                resolved_team_id = t["id"]
+        except Exception:
+            pass
+
+    resolved_cp_id = None
+    if checkpoint_id:
+        try:
+            cp = query_one("SELECT id FROM checkpoints WHERE id=%s OR checkpoint_code=%s LIMIT 1", (checkpoint_id, checkpoint_id))
+            if cp:
+                resolved_cp_id = cp["id"]
+        except Exception:
+            pass
+
+    resolved_insp_id = None
+    if inspection_id:
+        try:
+            si = query_one("SELECT id FROM safety_inspections WHERE id=%s OR inspection_code=%s LIMIT 1", (inspection_id, inspection_id))
+            if si:
+                resolved_insp_id = si["id"]
+        except Exception:
+            pass
+
     did, _ = execute(
-        """INSERT INTO drills (drill_type, title, scheduled_at, lead_officer_id, status)
-           VALUES (%s,%s,%s,%s,'planned')""",
-        (dtype, title, scheduled_at or datetime.now().isoformat(sep=" "), user_id),
+        """INSERT INTO drills (drill_type, title, scheduled_at, lead_officer_id, team_id, checkpoint_id, inspection_id, status)
+           VALUES (%s,%s,%s,%s,%s,%s,%s,'planned')""",
+        (dtype, title, scheduled_at or datetime.now().isoformat(sep=" "), user_id, resolved_team_id, resolved_cp_id, resolved_insp_id),
     )
-    write_audit("Drill scheduled", "drill", did, new_values={"title": title, "type": dtype})
+    write_audit("Drill scheduled", "drill", did, new_values={
+        "title": title, "type": dtype, "team_id": resolved_team_id,
+        "checkpoint_id": resolved_cp_id, "inspection_id": resolved_insp_id
+    })
 
 
 def create_plan(building, floor, assembly_zone, actor="OSAS Administrator", user_id=None):

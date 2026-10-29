@@ -287,11 +287,13 @@ def create_inspection():
     zone = (request.form.get('zone') or '').strip()
     insp_type = request.form.get('type') or 'General safety'
     date_val = request.form.get('date') or ''
-    if not zone:
-        flash('Inspection zone is required.', 'error')
-    else:
-        code = safety_svc.create_inspection(zone, insp_type, date_val, _actor(), _uid())
-        flash(f'Inspection {code} created and added to the OSAS review queue.', 'success')
+    checkpoint_id = request.form.get('checkpoint_id') or None
+    team_id = request.form.get('team_id') or None
+    code = safety_svc.create_inspection(zone, insp_type, date_val, _actor(), _uid(), team_id=team_id, checkpoint_id=checkpoint_id)
+    flash(f'Inspection {code} created and added to the OSAS review queue.', 'success')
+    ref = request.referrer or ''
+    if 'emergency' in ref:
+        return redirect(url_for('safety.emergency'))
     return redirect(url_for('safety.inspections'))
 
 
@@ -302,10 +304,16 @@ def create_drill():
     title = (request.form.get('title') or '').strip()
     drill_type = request.form.get('type') or 'Fire'
     scheduled_at = request.form.get('scheduled_at') or ''
+    team_id = request.form.get('team_id') or None
+    checkpoint_id = request.form.get('checkpoint_id') or None
+    inspection_id = request.form.get('inspection_id') or None
     if not title:
         flash('Drill title is required.', 'error')
     else:
-        safety_svc.create_drill(title, drill_type, scheduled_at, _actor(), _uid())
+        safety_svc.create_drill(
+            title, drill_type, scheduled_at, _actor(), _uid(),
+            team_id=team_id, checkpoint_id=checkpoint_id, inspection_id=inspection_id
+        )
         flash('Emergency drill saved to the preparedness calendar.', 'success')
     return redirect(url_for('safety.emergency'))
 

@@ -62,9 +62,13 @@ CREATE TABLE IF NOT EXISTS drills (
   drill_type ENUM('fire','earthquake','lockdown','medical','other') NOT NULL,
   title VARCHAR(180) NOT NULL, scheduled_at DATETIME NOT NULL,
   lead_officer_id INT NULL,
+  team_id INT NULL,
+  checkpoint_id INT NULL,
+  inspection_id INT NULL,
   status ENUM('planned','in_progress','completed','cancelled') NOT NULL DEFAULT 'planned',
   participant_count INT NOT NULL DEFAULT 0, notes TEXT,
-  FOREIGN KEY (lead_officer_id) REFERENCES users(id) ON DELETE SET NULL
+  FOREIGN KEY (lead_officer_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (checkpoint_id) REFERENCES checkpoints(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS evacuation_plans (
@@ -127,11 +131,15 @@ CREATE TABLE IF NOT EXISTS incident_attachments (
 
 CREATE TABLE IF NOT EXISTS safety_inspections (
   id INT AUTO_INCREMENT PRIMARY KEY, inspection_code VARCHAR(30) NOT NULL UNIQUE,
-  zone_id INT NOT NULL, inspector_id INT NULL, scheduled_date DATE NOT NULL,
+  zone_id INT NOT NULL, inspector_id INT NULL,
+  checkpoint_id INT NULL, team_id INT NULL,
+  scheduled_date DATE NOT NULL,
   completed_at DATETIME NULL, overall_score DECIMAL(5,2),
   status ENUM('scheduled','in_progress','completed','overdue') NOT NULL DEFAULT 'scheduled', notes TEXT,
   FOREIGN KEY (zone_id) REFERENCES campus_zones(id) ON DELETE CASCADE,
-  FOREIGN KEY (inspector_id) REFERENCES users(id) ON DELETE SET NULL
+  FOREIGN KEY (inspector_id) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY (checkpoint_id) REFERENCES checkpoints(id) ON DELETE SET NULL,
+  FOREIGN KEY (team_id) REFERENCES patrol_teams(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS inspection_items (

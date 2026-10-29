@@ -84,6 +84,32 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     ip_address TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS safety_inspections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_code TEXT NOT NULL UNIQUE,
+    zone_id INTEGER NOT NULL,
+    checkpoint_id INTEGER,
+    team_id INTEGER,
+    inspector_id INTEGER,
+    scheduled_date TEXT NOT NULL,
+    completed_at TEXT,
+    overall_score REAL,
+    status TEXT NOT NULL DEFAULT 'scheduled',
+    notes TEXT
+);
+CREATE TABLE IF NOT EXISTS drills (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    drill_type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    scheduled_at TEXT NOT NULL,
+    lead_officer_id INTEGER,
+    team_id INTEGER,
+    checkpoint_id INTEGER,
+    inspection_id INTEGER,
+    status TEXT NOT NULL DEFAULT 'planned',
+    participant_count INTEGER NOT NULL DEFAULT 0,
+    notes TEXT
+);
 CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
