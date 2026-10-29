@@ -414,6 +414,62 @@ def sync_mv_campus_geo():
         execute("UPDATE patrol_teams SET lead_name='Officer Cruz' WHERE id=%s AND (lead_name IS NULL OR lead_name='')", (team_a["id"],))
     if team_b:
         execute("UPDATE patrol_teams SET lead_name='Officer Santos' WHERE id=%s AND (lead_name IS NULL OR lead_name='')", (team_b["id"],))
+    _sync_legacy_team_leads()
+
+
+def _sync_legacy_team_leads():
+    """Recover user-entered team leads from audit_logs for teams created prior to lead_name column."""
+    try:
+        import json
+        teams = query_all("SELECT id, team_name, lead_name FROM patrol_teams") or []
+        audits = query_all(
+            "SELECT entity_id, new_values FROM audit_logs WHERE action = 'Team saved' ORDER BY id DESC"
+        ) or []
+
+        fallback_seeds = {
+            "alpha": "Officer Cruz",
+            "team alpha": "Officer Cruz",
+            "bravo": "Officer Santos",
+            "team bravo": "Officer Santos",
+            "charlie": "Officer Reyes",
+            "team charlie": "Officer Reyes",
+            "delta": "Officer Ramos",
+            "team delta": "Officer Ramos",
+        }
+
+        for t in teams:
+            tid = t["id"]
+            tname = (t.get("team_name") or "").strip()
+            current_lead = (t.get("lead_name") or "").strip()
+
+            if current_lead and current_lead != "OSAS Administrator":
+                continue
+
+            recovered_lead = None
+            for a in audits:
+                try:
+                    nv = a.get("new_values")
+                    if isinstance(nv, str):
+                        nv = json.loads(nv)
+                    if not isinstance(nv, dict):
+                        continue
+
+                    audit_name = (nv.get("name") or "").strip()
+                    if a.get("entity_id") == tid or (audit_name and audit_name.lower() == tname.lower()):
+                        lead_val = (nv.get("lead") or "").strip()
+                        if lead_val and lead_val != "OSAS Administrator":
+                            recovered_lead = lead_val
+                            break
+                except Exception:
+                    continue
+
+            if not recovered_lead:
+                recovered_lead = fallback_seeds.get(tname.lower())
+
+            if recovered_lead:
+                execute("UPDATE patrol_teams SET lead_name = %s WHERE id = %s", (recovered_lead, tid))
+    except Exception:
+        pass
 
 
 def _ensure_incident_schema():
@@ -488,6 +544,7 @@ def _ensure_incident_schema():
 def ensure_campus_seed():
     """Insert baseline campus geography if the DB is empty."""
     _ensure_incident_schema()
+    _sync_legacy_team_leads()
     if current_app.config.get("TESTING"):
         if not query_one("SELECT id FROM campus_zones LIMIT 1"):
             execute(
@@ -1029,7 +1086,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
     teams_raw = query_all(
         """
         SELECT t.*,
-               COALESCE(NULLIF(t.lead_name, ''), u.full_name, 'Unassigned') AS lead_name,
+               COALESCE(NULLIF(t.lead_name, ''), CASE WHEN u.role = 'admin' THEN 'Unassigned' ELSE u.full_name END, 'Unassigned') AS lead_name,
                (SELECT COUNT(*) FROM patrol_team_members m WHERE m.team_id = t.id) AS members,
                (SELECT COUNT(*) FROM patrol_shifts s WHERE s.team_id = t.id AND s.status = 'active') AS active_shifts,
                (SELECT COUNT(*) FROM incidents i WHERE i.team_id = t.id AND i.status NOT IN ('resolved', 'closed')) AS active_incidents
