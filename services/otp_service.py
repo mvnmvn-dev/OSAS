@@ -6,6 +6,8 @@ import hmac
 import secrets
 import smtplib
 
+import requests
+
 from flask import current_app
 
 from models.database import execute, query_one
@@ -37,10 +39,33 @@ def _safe_email(email):
 
 
 def _send_email(recipient, code, expires_minutes):
+    body = (
+        "Your OSAS sign-in verification code is %s. It expires in %d minutes and can be used only once.\n\n"
+        "If you did not attempt to sign in, contact the OSAS administrator." % (code, expires_minutes)
+    )
+
+    api_key = current_app.config.get("RESEND_API_KEY")
+    if api_key:
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={
+                "from": current_app.config.get("RESEND_FROM"),
+                "to": [recipient],
+                "subject": "Your OSAS verification code",
+                "text": body,
+            },
+            timeout=10,
+        )
+        if resp.status_code >= 300:
+            current_app.logger.error("Resend failed %s: %s", resp.status_code, resp.text)
+            raise RuntimeError("Resend email delivery failed")
+        return "email"
+
     host = current_app.config.get("SMTP_HOST")
     if not host:
         if current_app.config.get("FLASK_ENV") == "production":
-            raise RuntimeError("SMTP_HOST is required for OTP delivery in production")
+            raise RuntimeError("RESEND_API_KEY or SMTP_HOST is required for OTP delivery in production")
         # Development has no implicit bypass: the code is only available in logs.
         current_app.logger.warning("Development OTP for %s: %s", recipient, code)
         return "development_log"
@@ -49,10 +74,7 @@ def _send_email(recipient, code, expires_minutes):
     message["Subject"] = "Your OSAS verification code"
     message["From"] = current_app.config.get("SMTP_FROM") or current_app.config.get("SMTP_USER")
     message["To"] = recipient
-    message.set_content(
-        "Your OSAS sign-in verification code is %s. It expires in %d minutes and can be used only once.\n\n"
-        "If you did not attempt to sign in, contact the OSAS administrator." % (code, expires_minutes)
-    )
+    message.set_content(body)
     port = int(current_app.config.get("SMTP_PORT", 587))
     with smtplib.SMTP(host, port, timeout=10) as smtp:
         smtp.ehlo()

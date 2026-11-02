@@ -54,7 +54,7 @@ class Config:
     MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     LOGIN_LOCKOUT_MINUTES = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "5"))
     _smtp_host = os.getenv("SMTP_HOST", "")
-    _otp_default = "0" if FLASK_ENV == "production" and not _smtp_host else "1"
+    _otp_default = "0" if FLASK_ENV == "production" and not (_smtp_host or os.getenv("RESEND_API_KEY")) else "1"
     OTP_ENABLED = os.getenv("OTP_ENABLED", _otp_default).lower() in ("1", "true", "yes")
     OTP_EXPIRY_MINUTES = int(os.getenv("OTP_EXPIRY_MINUTES", "5"))
     OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
@@ -122,6 +122,8 @@ class Config:
     SMTP_USER = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
     SMTP_FROM = os.getenv("SMTP_FROM", "osas@bcp.edu.ph")
+    RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
+    RESEND_FROM = os.getenv("RESEND_FROM", "OSAS <onboarding@resend.dev>")
     SMS_PROVIDER_URL = os.getenv("SMS_PROVIDER_URL", "")
     SMS_API_KEY = os.getenv("SMS_API_KEY", "")
 
