@@ -81,6 +81,10 @@ def table_exists(database: str, table: str) -> bool:
 
 def apply_schema(database: str) -> None:
     sql = SCHEMA.read_text(encoding="utf-8")
+    # Strip comments before splitting: semicolons inside comments otherwise
+    # leave trailing comment text that can be mistaken for an SQL statement.
+    sql = re.sub(r"/\*.*?\*/", "", sql, flags=re.S)
+    sql = re.sub(r"(?m)^\s*--.*$", "", sql)
     conn = _connect(None if Config.DATABASE_URL else database)
     try:
         cur = conn.cursor()
@@ -88,14 +92,6 @@ def apply_schema(database: str) -> None:
             statement = statement.strip()
             if not statement:
                 continue
-
-            # A semicolon inside a SQL comment can leave a comment-only fragment.
-            # PostgreSQL treats executing that fragment as an empty query.
-            without_comments = re.sub(r"/\*.*?\*/", "", statement, flags=re.S)
-            without_comments = re.sub(r"(?m)^\s*--.*$", "", without_comments).strip()
-            if not without_comments:
-                continue
-
             upper = statement.upper()
             if upper.startswith("CREATE DATABASE") or upper.startswith("USE "):
                 continue
