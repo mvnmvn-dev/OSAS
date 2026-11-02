@@ -57,6 +57,41 @@ def test_admin_can_view_and_create_users(admin_client, app):
     assert user["must_change_password"] == 1
 
 
+def test_admin_accounts_can_share_email_for_otp_but_other_roles_cannot(admin_client, app):
+    shared_email = "user-admin@test.edu"
+    response = admin_client.post(
+        "/admin/users/create",
+        data={
+            "username": "second_admin",
+            "email": shared_email,
+            "full_name": "Second Admin",
+            "campus_id": "SECOND-ADMIN",
+            "role": "admin",
+            "password": "temporary123",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        assert query_one("SELECT id FROM users WHERE username=%s", ("second_admin",))
+
+    response = admin_client.post(
+        "/admin/users/create",
+        data={
+            "username": "guard_shared_email",
+            "email": shared_email,
+            "full_name": "Shared Email Guard",
+            "campus_id": "SHARED-GUARD",
+            "role": "guard",
+            "password": "temporary123",
+        },
+        follow_redirects=True,
+    )
+    assert response.status_code == 200
+    with app.app_context():
+        assert query_one("SELECT id FROM users WHERE username=%s", ("guard_shared_email",)) is None
+
+
 def test_non_admin_cannot_view_user_management(client, app):
     _seed_user(app, "user_faculty", "faculty_staff", "user-faculty@test.edu", "USER-FACULTY")
     _login(client, "user_faculty")

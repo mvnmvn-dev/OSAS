@@ -11,6 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import psycopg2  # noqa: E402
+from psycopg2 import sql as psycopg2_sql  # noqa: E402
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
 from config import Config  # noqa: E402
@@ -102,6 +103,28 @@ def apply_schema(database: str) -> None:
         conn.close()
 
 
+def migrate_shared_admin_email(database: str) -> None:
+    """Drop the legacy email-only unique constraint so admins can share an inbox."""
+    conn = _connect(None if Config.DATABASE_URL else database)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT conname FROM pg_constraint
+               WHERE conrelid = 'users'::regclass AND contype = 'u'
+                 AND pg_get_constraintdef(oid) = 'UNIQUE (email)'"""
+        )
+        for (constraint_name,) in cur.fetchall():
+            cur.execute(
+                psycopg2_sql.SQL("ALTER TABLE users DROP CONSTRAINT {}").format(
+                    psycopg2_sql.Identifier(constraint_name)
+                )
+            )
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
+
+
 def _seed_users(database: str) -> None:
     rows = [
         (
@@ -115,7 +138,7 @@ def _seed_users(database: str) -> None:
         (
             "admin",
             generate_password_hash("password123"),
-            "admin@bcp.edu.ph",
+            Config.SEED_EMAIL,
             "OSAS Administrator",
             "admin",
             "OSAS-0001",
@@ -179,6 +202,7 @@ def bootstrap_with_app(app=None) -> dict:
             print("Applying login_otp_challenges migration ...")
             apply_schema(database)
             status["schema_applied"] = True
+    migrate_shared_admin_email(database)
     print("Seeding software.engineer / demo users / campus ...")
     _seed_users(database)
     status["seeded"] = True

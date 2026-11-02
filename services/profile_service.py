@@ -6,6 +6,7 @@ from flask import current_app
 from werkzeug.utils import secure_filename
 
 from models.database import execute, query_one
+from services.email_policy import email_conflicts
 
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
 
@@ -45,8 +46,10 @@ def update_profile(user_id, full_name, email):
     if not email or "@" not in email:
         return False, "A valid email is required."
 
-    existing = query_one("SELECT id FROM users WHERE email = %s AND id != %s", (email, user_id))
-    if existing:
+    account = query_one("SELECT role FROM users WHERE id = %s", (user_id,))
+    if not account:
+        return False, "User account not found."
+    if email_conflicts(email, account["role"], user_id):
         return False, "That email is already in use."
 
     execute(

@@ -4,6 +4,7 @@ from flask_login import current_user, login_required
 from models.database import execute, query_all, query_one
 from models.user import User
 from services.audit_service import write_audit
+from services.email_policy import email_conflicts
 from services.rbac import require_permission
 
 users_bp = Blueprint("users", __name__, url_prefix="/admin/users")
@@ -75,7 +76,7 @@ def create():
         flash("Invalid user role.", "error")
     elif len(password) < 8:
         flash("Password must be at least 8 characters.", "error")
-    elif query_one("SELECT id FROM users WHERE username=%s OR email=%s OR campus_id=%s", (username, email, campus_id)):
+    elif query_one("SELECT id FROM users WHERE username=%s OR campus_id=%s", (username, campus_id)) or email_conflicts(email, role):
         flash("Username, email, or campus ID is already in use.", "error")
     else:
         user_id, _ = execute(
@@ -108,7 +109,7 @@ def update(user_id):
         flash("Full name, email, and campus ID are required.", "error")
     elif user_id == current_user.id and status != "active":
         flash("You cannot disable your own administrator account.", "error")
-    elif query_one("SELECT id FROM users WHERE (email=%s OR campus_id=%s) AND id<>%s", (email, campus_id, user_id)):
+    elif query_one("SELECT id FROM users WHERE campus_id=%s AND id<>%s", (campus_id, user_id)) or email_conflicts(email, role, user_id):
         flash("Email or campus ID is already in use.", "error")
     elif user["role"] == "admin" and role != "admin" and not query_one("SELECT id FROM users WHERE role='admin' AND account_status='active' AND id<>%s LIMIT 1", (user_id,)):
         flash("At least one active administrator must remain.", "error")

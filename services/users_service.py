@@ -4,6 +4,7 @@ import string
 from models.database import execute, query_all, query_one
 from models.user import User
 from services.analytics_service import log_event
+from services.email_policy import email_conflicts
 from services.rbac import ROLE_LABELS
 
 
@@ -122,7 +123,7 @@ def create_user(data, actor_id):
 
     if query_one("SELECT id FROM users WHERE username = %s", (username,)):
         return False, "Username already exists."
-    if query_one("SELECT id FROM users WHERE email = %s", (email,)):
+    if email_conflicts(email, role):
         return False, "Email already exists."
     if query_one("SELECT id FROM users WHERE campus_id = %s", (campus_id,)):
         return False, "Campus ID already exists."
@@ -165,6 +166,10 @@ def update_user(user_id, data, actor_id, reason=None):
     if new_role not in ROLE_LABELS:
         return False, "Invalid role."
 
+    email = data.get("email", existing["email"]).strip()
+    if email_conflicts(email, new_role, user_id):
+        return False, "Email already exists."
+
     if existing["role"] == "admin" and new_role != "admin":
         if user_id == actor_id:
             return False, "You cannot remove your own admin role."
@@ -187,7 +192,7 @@ def update_user(user_id, data, actor_id, reason=None):
            account_status = %s WHERE id = %s""",
         (
             data.get("full_name", existing["full_name"]).strip(),
-            data.get("email", existing["email"]).strip(),
+            email,
             new_role,
             new_campus,
             new_status,
