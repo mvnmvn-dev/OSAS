@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 import os
 import secrets
+import threading
+import time
 import uuid
 from datetime import datetime, timedelta
 from io import BytesIO
@@ -353,6 +355,36 @@ OFFICIAL_CHECKPOINT_RISK = {
 }
 
 ACTIVE_CHECKPOINT_CODES = {row[0] for row in CAMPUS_CHECKPOINTS}
+
+# These operations touch many rows and issue multiple serial SQL queries.
+# Cache them per Gunicorn worker instead of repeating them on every page view.
+_dashboard_seed_ready = False
+_dashboard_seed_lock = threading.Lock()
+_risk_refresh_at = 0.0
+_risk_refresh_lock = threading.Lock()
+_RISK_REFRESH_INTERVAL_SECONDS = 300
+
+
+def _prepare_dashboard_data():
+    global _dashboard_seed_ready, _risk_refresh_at
+    if not _dashboard_seed_ready:
+        with _dashboard_seed_lock:
+            if not _dashboard_seed_ready:
+                ensure_campus_seed()
+                _dashboard_seed_ready = True
+
+    now = time.monotonic()
+    if now - _risk_refresh_at >= _RISK_REFRESH_INTERVAL_SECONDS:
+        with _risk_refresh_lock:
+            now = time.monotonic()
+            if now - _risk_refresh_at >= _RISK_REFRESH_INTERVAL_SECONDS:
+                try:
+                    risk_scoring.refresh_all_risk_scores()
+                except Exception:
+                    # Preserve current dashboard behavior if risk refresh fails.
+                    pass
+                finally:
+                    _risk_refresh_at = time.monotonic()
 
 
 def sync_mv_campus_geo():
@@ -1090,11 +1122,7 @@ def _build_dashboard_analytics(
 
 
 def get_safety_dashboard(section="overview", status_filter=None):
-    ensure_campus_seed()
-    try:
-        risk_scoring.refresh_all_risk_scores()
-    except Exception:
-        pass
+    _prepare_dashboard_data()
 
     incidents = _incident_rows()
     all_incidents = incidents
