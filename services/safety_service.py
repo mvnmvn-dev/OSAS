@@ -764,57 +764,78 @@ def _incident_rows():
     return out
 
 
-def _checkpoint_rows():
-    weights = {w["checkpoint_id"]: w for w in risk_scoring.checkpoint_priority_weights()}
+def _checkpoint_lookup_rows():
+    """Lightweight checkpoint options for forms that do not display patrol history."""
     rows = query_all(
-        """
-        SELECT c.*, z.zone_name, z.zone_code,
-               (SELECT MAX(pl.scanned_at) FROM patrol_logs pl WHERE pl.checkpoint_id = c.id) AS last_scan,
-               (SELECT COUNT(*) FROM incidents i WHERE (i.checkpoint_id = c.id OR (i.checkpoint_id IS NULL AND i.zone_id = c.zone_id)) AND i.status NOT IN ('resolved', 'closed')) AS open_incidents
-        FROM checkpoints c
-        JOIN campus_zones z ON z.id = c.zone_id
-        WHERE c.active = 1
-        ORDER BY c.checkpoint_code
-        """
+        """SELECT c.id, c.checkpoint_code, c.checkpoint_name, c.scan_token,
+                  c.latitude, c.longitude, z.zone_name, z.zone_code
+           FROM checkpoints c JOIN campus_zones z ON z.id = c.zone_id
+           WHERE c.active = 1 ORDER BY c.checkpoint_code"""
     )
+    return [{
+        "id": r["id"], "code": r["checkpoint_code"], "name": r["checkpoint_name"],
+        "zone_name": r["zone_name"], "scan_token": r["scan_token"],
+        "lat": float(r["latitude"]) if r["latitude"] is not None else None,
+        "lng": float(r["longitude"]) if r["longitude"] is not None else None,
+        "active": True, "risk": 0, "open_incidents": 0, "history": [],
+        "last_scan": "—", "last_scan_ago": "No scans yet", "patrol_status": "Awaiting scan",
+        "patrol_status_ok": False, "risk_level": "MEDIUM", "tone": "warning",
+        "official_risk": "Medium", "official_score": 5,
+        "patrol_frequency": OFFICIAL_ZONE_FREQUENCY.get(r.get("zone_code"), "Every 60 minutes"),
+        "method": "QR", "map_class": None,
+    } for r in rows]
+
+
+def _checkpoint_rows():
+    """Load dashboard checkpoints in a few queries, using the cached zone risk score."""
+    rows = query_all(
+        """SELECT c.*, z.zone_name, z.zone_code, z.risk_score AS zone_risk,
+                  (SELECT MAX(pl.scanned_at) FROM patrol_logs pl WHERE pl.checkpoint_id = c.id) AS last_scan,
+                  (SELECT COUNT(*) FROM incidents i WHERE (i.checkpoint_id = c.id OR (i.checkpoint_id IS NULL AND i.zone_id = c.zone_id)) AND i.status NOT IN ('resolved', 'closed')) AS open_incidents
+           FROM checkpoints c JOIN campus_zones z ON z.id = c.zone_id
+           WHERE c.active = 1 ORDER BY c.checkpoint_code"""
+    )
+    ids = [r["id"] for r in rows]
+    histories = {checkpoint_id: [] for checkpoint_id in ids}
+    if ids:
+        history_rows = query_all(
+            """SELECT checkpoint_id, scanned_at, result FROM (
+                   SELECT checkpoint_id, scanned_at, result,
+                          ROW_NUMBER() OVER (PARTITION BY checkpoint_id ORDER BY scanned_at DESC) AS rn
+                   FROM patrol_logs WHERE checkpoint_id = ANY(%s)
+               ) recent WHERE rn <= 4 ORDER BY checkpoint_id, scanned_at DESC""",
+            (ids,),
+        )
+        for row in history_rows:
+            result = (row.get("result") or "valid").lower()
+            histories[row["checkpoint_id"]].append({
+                "time": _fmt_time(row.get("scanned_at")),
+                "label": "Scanned" if result == "valid" else result.replace("_", " ").title(),
+                "ok": result == "valid",
+            })
     out = []
     for r in rows:
-        w = weights.get(r["id"], {})
         official_risk, official_score = OFFICIAL_CHECKPOINT_RISK.get(r["checkpoint_code"], ("Medium", 5))
-        score = w.get("score") or float(r.get("risk") or 0) or 50
-        tone = w.get("tone") or ("danger" if score >= 80 else "warning" if score >= 65 else "success")
+        score = float(r.get("zone_risk") or official_score or 50)
+        tone = "danger" if score >= 80 else "warning" if score >= 65 else "success"
         last = r.get("last_scan")
-        history = _checkpoint_scan_history(r["id"])
-        delayed = any(not h["ok"] for h in history[:1]) if history else False
+        history = histories.get(r["id"], [])
+        delayed = bool(history and not history[0]["ok"])
         on_schedule = bool(last) and not delayed
         out.append({
-            "id": r["id"],
-            "code": r["checkpoint_code"],
-            "name": r["checkpoint_name"],
-            "method": "QR",
-            "last_scan": last.strftime("%I:%M %p").lstrip("0") if last else "—",
-            "last_scan_ago": _relative_ago(last) if last else "No scans yet",
-            "risk": score,
-            "official_risk": official_risk,
-            "official_score": official_score,
+            "id": r["id"], "code": r["checkpoint_code"], "name": r["checkpoint_name"],
+            "method": "QR", "last_scan": last.strftime("%I:%M %p").lstrip("0") if last else "—",
+            "last_scan_ago": _relative_ago(last) if last else "No scans yet", "risk": score,
+            "official_risk": official_risk, "official_score": official_score,
             "patrol_frequency": OFFICIAL_ZONE_FREQUENCY.get(r.get("zone_code"), "Every 60 minutes"),
-            "tone": tone,
-            "lat": float(r["latitude"]) if r["latitude"] is not None else None,
+            "tone": tone, "lat": float(r["latitude"]) if r["latitude"] is not None else None,
             "lng": float(r["longitude"]) if r["longitude"] is not None else None,
             "scan_token": r["scan_token"],
-            "map_class": {
-                "ENT": "gate",
-                "PG": "center",
-                "OSAS": "command",
-                "ITS": "science",
-            }.get(r["checkpoint_code"]),
-            "zone_name": r.get("zone_name"),
-            "active": True,
+            "map_class": {"ENT": "gate", "PG": "center", "OSAS": "command", "ITS": "science"}.get(r["checkpoint_code"]),
+            "zone_name": r.get("zone_name"), "active": True,
             "patrol_status": "On Schedule" if on_schedule else ("Delayed" if delayed else "Awaiting scan"),
-            "patrol_status_ok": on_schedule,
-            "history": history,
-            "risk_level": official_risk.upper(),
-            "open_incidents": r.get("open_incidents") or 0,
+            "patrol_status_ok": on_schedule, "history": history,
+            "risk_level": official_risk.upper(), "open_incidents": r.get("open_incidents") or 0,
         })
     return out
 
@@ -855,71 +876,92 @@ def _last_data_timestamp():
 
 
 def _operational_metrics():
-    """Calculate dashboard KPIs from current records instead of fixed demo values."""
-    routes = query_one("""SELECT COUNT(*) AS total,
-                                COUNT(*) FILTER (WHERE status = 'completed') AS completed,
-                                COUNT(*) FILTER (WHERE status IN ('assigned','in_progress')) AS active
-                         FROM patrol_routes WHERE created_at >= NOW() - INTERVAL 7 DAY""") or {}
-    scans = query_one("""SELECT COUNT(*) AS total,
-                               COUNT(*) FILTER (WHERE result = 'valid') AS valid,
-                               COUNT(*) FILTER (WHERE result IN ('missed','late','invalid')) AS missed
-                        FROM patrol_logs WHERE scanned_at >= NOW() - INTERVAL 7 DAY""") or {}
-    covered = query_one(
-        """SELECT COUNT(DISTINCT checkpoint_id) AS c FROM patrol_logs
-           WHERE result='valid' AND scanned_at >= NOW() - INTERVAL 7 DAY"""
-    ) or {}
-    total_cp = query_one("SELECT COUNT(*) AS c FROM checkpoints WHERE active=1") or {}
-    planned = int(routes.get("total") or 0)
-    completed = int(routes.get("completed") or 0)
-    scan_total = int(scans.get("total") or 0)
-    covered_cp = int(covered.get("c") or 0)
-    checkpoint_total = int(total_cp.get("c") or 0)
+    """Fetch shared dashboard KPIs as a single aggregate round trip."""
+    if current_app.config.get("TESTING"):
+        row = query_one("""SELECT
+            (SELECT COUNT(*) FROM patrol_routes WHERE created_at >= datetime('now','-7 days')) AS route_total,
+            (SELECT SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) FROM patrol_routes WHERE created_at >= datetime('now','-7 days')) AS route_completed,
+            (SELECT SUM(CASE WHEN status IN ('assigned','in_progress') THEN 1 ELSE 0 END) FROM patrol_routes WHERE created_at >= datetime('now','-7 days')) AS route_active,
+            (SELECT COUNT(*) FROM patrol_logs WHERE scanned_at >= datetime('now','-7 days')) AS scan_total,
+            (SELECT SUM(CASE WHEN result='valid' THEN 1 ELSE 0 END) FROM patrol_logs WHERE scanned_at >= datetime('now','-7 days')) AS scan_valid,
+            (SELECT SUM(CASE WHEN result IN ('missed','late','invalid') THEN 1 ELSE 0 END) FROM patrol_logs WHERE scanned_at >= datetime('now','-7 days')) AS scan_missed,
+            (SELECT COUNT(DISTINCT checkpoint_id) FROM patrol_logs WHERE result='valid' AND scanned_at >= datetime('now','-7 days')) AS covered_checkpoints,
+            (SELECT COUNT(*) FROM checkpoints WHERE active=1) AS checkpoint_total,
+            (SELECT COUNT(*) FROM safety_inspections) AS inspection_total,
+            (SELECT SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) FROM safety_inspections) AS inspection_completed,
+            (SELECT SUM(CASE WHEN status='scheduled' THEN 1 ELSE 0 END) FROM safety_inspections) AS inspection_scheduled,
+            (SELECT SUM(CASE WHEN status='overdue' THEN 1 ELSE 0 END) FROM safety_inspections) AS inspection_overdue,
+            (SELECT COUNT(*) FROM drills) AS drill_total,
+            (SELECT SUM(CASE WHEN status='completed' THEN 1 ELSE 0 END) FROM drills) AS drill_completed,
+            (SELECT SUM(CASE WHEN status IN ('planned','scheduled') THEN 1 ELSE 0 END) FROM drills) AS drill_upcoming,
+            (SELECT AVG(risk_score) FROM risk_assessments WHERE status IN ('open','mitigating')) AS risk_average,
+            (SELECT AVG((julianday(COALESCE(resolved_at,CURRENT_TIMESTAMP))-julianday(reported_at))*1440.0) FROM incidents WHERE reported_at >= datetime('now','-30 days')) AS avg_response,
+            (SELECT COUNT(*) FROM patrol_teams WHERE active=1) AS team_total,
+            (SELECT COUNT(*) FROM patrol_teams t WHERE active=1 AND EXISTS (SELECT 1 FROM patrol_shifts s WHERE s.team_id=t.id AND s.status='active')) AS team_on_duty,
+            ((SELECT COUNT(*) FROM first_aid_inventory WHERE status IN ('low_stock','expired')) + (SELECT COUNT(*) FROM risk_assessments WHERE status IN ('open','mitigating'))) AS actions_total,
+            (SELECT COUNT(*) FROM (SELECT id FROM audit_logs ORDER BY created_at DESC LIMIT 50) recent) AS activity_total""") or {}
+    else:
+        row = query_one("""SELECT
+            (SELECT COUNT(*) FROM patrol_routes WHERE created_at >= NOW() - INTERVAL '7 days') AS route_total,
+            (SELECT COUNT(*) FILTER (WHERE status='completed') FROM patrol_routes WHERE created_at >= NOW() - INTERVAL '7 days') AS route_completed,
+            (SELECT COUNT(*) FILTER (WHERE status IN ('assigned','in_progress')) FROM patrol_routes WHERE created_at >= NOW() - INTERVAL '7 days') AS route_active,
+            (SELECT COUNT(*) FROM patrol_logs WHERE scanned_at >= NOW() - INTERVAL '7 days') AS scan_total,
+            (SELECT COUNT(*) FILTER (WHERE result='valid') FROM patrol_logs WHERE scanned_at >= NOW() - INTERVAL '7 days') AS scan_valid,
+            (SELECT COUNT(*) FILTER (WHERE result IN ('missed','late','invalid')) FROM patrol_logs WHERE scanned_at >= NOW() - INTERVAL '7 days') AS scan_missed,
+            (SELECT COUNT(DISTINCT checkpoint_id) FROM patrol_logs WHERE result='valid' AND scanned_at >= NOW() - INTERVAL '7 days') AS covered_checkpoints,
+            (SELECT COUNT(*) FROM checkpoints WHERE active=1) AS checkpoint_total,
+            (SELECT COUNT(*) FROM safety_inspections) AS inspection_total,
+            (SELECT COUNT(*) FILTER (WHERE status='completed') FROM safety_inspections) AS inspection_completed,
+            (SELECT COUNT(*) FILTER (WHERE status='scheduled') FROM safety_inspections) AS inspection_scheduled,
+            (SELECT COUNT(*) FILTER (WHERE status='overdue') FROM safety_inspections) AS inspection_overdue,
+            (SELECT COUNT(*) FROM drills) AS drill_total,
+            (SELECT COUNT(*) FILTER (WHERE status='completed') FROM drills) AS drill_completed,
+            (SELECT COUNT(*) FILTER (WHERE status IN ('planned','scheduled')) FROM drills) AS drill_upcoming,
+            (SELECT AVG(risk_score) FROM risk_assessments WHERE status IN ('open','mitigating')) AS risk_average,
+            (SELECT AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at,NOW())-reported_at))/60.0) FROM incidents WHERE reported_at >= NOW() - INTERVAL '30 days') AS avg_response,
+            (SELECT COUNT(*) FROM patrol_teams WHERE active=1) AS team_total,
+            (SELECT COUNT(*) FROM patrol_teams t WHERE active=1 AND EXISTS (SELECT 1 FROM patrol_shifts s WHERE s.team_id=t.id AND s.status='active')) AS team_on_duty,
+            ((SELECT COUNT(*) FROM first_aid_inventory WHERE status IN ('low_stock','expired')) + (SELECT COUNT(*) FROM risk_assessments WHERE status IN ('open','mitigating'))) AS actions_total,
+            (SELECT COUNT(*) FROM (SELECT id FROM audit_logs ORDER BY created_at DESC LIMIT 50) recent) AS activity_total""") or {}
+
+    planned = int(row.get("route_total") or 0)
+    completed = int(row.get("route_completed") or 0)
+    scan_total = int(row.get("scan_total") or 0)
+    covered_cp = int(row.get("covered_checkpoints") or 0)
+    checkpoint_total = int(row.get("checkpoint_total") or 0)
+    valid_scans = int(row.get("scan_valid") or 0)
     if scan_total:
-        coverage = round((int(scans.get("valid") or 0) / scan_total) * 100)
+        coverage = round(valid_scans / scan_total * 100)
     elif planned:
         coverage = round(completed / planned * 100)
     elif checkpoint_total:
-        coverage = round((covered_cp / checkpoint_total) * 100)
+        coverage = round(covered_cp / checkpoint_total * 100)
     else:
         coverage = 0
-    inspections = query_one("SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed FROM safety_inspections") or {}
-    drills = query_one("SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed FROM drills") or {}
-    risks = query_one("SELECT AVG(risk_score) AS average FROM risk_assessments WHERE status IN ('open','mitigating')") or {}
-    insp_total = int(inspections.get("total") or 0)
-    drill_total = int(drills.get("total") or 0)
-    # No records ⇒ 0% (not a fake 100% "perfect" score)
-    insp_score = (int(inspections.get("completed") or 0) / insp_total * 100) if insp_total else 0
-    drill_score = (int(drills.get("completed") or 0) / drill_total * 100) if drill_total else 0
-    risk_score = float(risks.get("average") or 0)
-    if insp_total or drill_total or risk_score:
-        readiness = round(max(0, min(100, insp_score * .4 + drill_score * .3 + (100 - min(100, risk_score * 5)) * .3)))
-    else:
-        readiness = 0
-    if current_app.config.get("TESTING"):
-        response = query_one(
-            """SELECT AVG((julianday(COALESCE(resolved_at, CURRENT_TIMESTAMP))
-                           - julianday(reported_at)) * 1440.0) AS minutes
-               FROM incidents WHERE reported_at >= datetime('now', '-30 days')"""
-        ) or {}
-    else:
-        # Keep this PostgreSQL-native: the shared TIMESTAMPDIFF translator
-        # cannot safely parse the nested COALESCE expression.
-        response = query_one(
-            """SELECT AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at, NOW())
-                           - reported_at)) / 60.0) AS minutes
-               FROM incidents WHERE reported_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'"""
-        ) or {}
-    minutes = response.get("minutes")
+    insp_total = int(row.get("inspection_total") or 0)
+    drill_total = int(row.get("drill_total") or 0)
+    insp_completed = int(row.get("inspection_completed") or 0)
+    drill_completed = int(row.get("drill_completed") or 0)
+    insp_score = insp_completed / insp_total * 100 if insp_total else 0
+    drill_score = drill_completed / drill_total * 100 if drill_total else 0
+    risk_score = float(row.get("risk_average") or 0)
+    readiness = round(max(0, min(100, insp_score * .4 + drill_score * .3 + (100 - min(100, risk_score * 5)) * .3))) if (insp_total or drill_total or risk_score) else 0
+    minutes = row.get("avg_response")
     return {
-        "coverage": coverage,
-        "completed": completed,
-        "planned": planned,
-        "missed": int(scans.get("missed") or 0),
-        "active_routes": int(routes.get("active") or 0),
+        "coverage": coverage, "completed": completed, "planned": planned,
+        "missed": int(row.get("scan_missed") or 0), "active_routes": int(row.get("route_active") or 0),
         "readiness": readiness,
         "avg_response": f"{max(0, round(float(minutes))):02d}m" if minutes is not None else "—",
-        "covered_checkpoints": covered_cp,
-        "checkpoint_total": checkpoint_total,
+        "covered_checkpoints": covered_cp, "checkpoint_total": checkpoint_total,
+        "inspection_total": insp_total, "inspection_completed": insp_completed,
+        "inspection_scheduled": int(row.get("inspection_scheduled") or 0),
+        "inspection_overdue": int(row.get("inspection_overdue") or 0),
+        "drill_total": drill_total, "drill_completed": drill_completed,
+        "drill_upcoming": int(row.get("drill_upcoming") or 0),
+        "team_total": int(row.get("team_total") or 0),
+        "team_on_duty": int(row.get("team_on_duty") or 0),
+        "actions_total": int(row.get("actions_total") or 0),
+        "activity_total": int(row.get("activity_total") or 0),
     }
 
 
@@ -1124,9 +1166,22 @@ def _build_dashboard_analytics(
 def get_safety_dashboard(section="overview", status_filter=None):
     _prepare_dashboard_data()
 
-    incidents = _incident_rows()
+    load_incidents = section in {"overview", "incidents"}
+    load_checkpoint_details = section in {"overview", "emergency", "patrol", "teams"}
+    load_checkpoint_lookups = section in {"incidents", "inspections", "osas"}
+    load_checkpoints = load_checkpoint_details or load_checkpoint_lookups
+    load_teams = section in {"overview", "incidents", "inspections", "osas", "emergency", "patrol", "teams"}
+    load_inspections = section in {"overview", "inspections", "osas", "emergency"}
+    load_actions = section in {"overview", "inspections", "osas"}
+    load_drills = section in {"overview", "emergency"}
+    load_plans = section in {"overview", "emergency"}
+    load_activity = section in {"overview", "activity"}
+    load_route = section in {"overview", "patrol"}
+    load_zones = section in {"overview", "reports"}
+
+    incidents = _incident_rows() if load_incidents else []
     all_incidents = incidents
-    checkpoints = _checkpoint_rows()
+    checkpoints = (_checkpoint_rows() if load_checkpoint_details else _checkpoint_lookup_rows()) if load_checkpoints else []
     all_checkpoints = checkpoints
     display_checkpoints = [c for c in checkpoints if c.get("active", True)]
 
@@ -1142,7 +1197,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         WHERE t.active = 1
         ORDER BY t.team_name
         """
-    )
+    ) if load_teams else []
     teams = []
     for t in teams_raw:
         on_duty = t["active_shifts"] > 0
@@ -1168,7 +1223,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         LEFT JOIN checkpoints cp ON cp.id = si.checkpoint_id
         ORDER BY si.scheduled_date DESC
         """
-    )
+    ) if load_inspections else []
     inspections = []
     for r in inspections_raw:
         label, css = _title_status(r["status"])
@@ -1191,25 +1246,25 @@ def get_safety_dashboard(section="overview", status_filter=None):
         })
 
     actions = []
-    for item in query_all(
+    for item in (query_all(
         "SELECT * FROM first_aid_inventory WHERE status IN ('low_stock','expired') ORDER BY quantity ASC LIMIT 20"
-    ):
+    ) if load_actions else []):
         actions.append({
             "title": f"Restock {item['item_name']}",
             "detail": f"{item['cabinet_location']} · qty {item['quantity']}",
         })
-    for risk in query_all(
+    for risk in (query_all(
         """SELECT ra.*, z.zone_name FROM risk_assessments ra
            JOIN campus_zones z ON z.id = ra.zone_id
            WHERE ra.status IN ('open','mitigating') ORDER BY ra.risk_score DESC LIMIT 20"""
-    ):
+    ) if load_actions else []):
         actions.append({
             "title": risk["hazard_title"],
             "detail": f"{risk['zone_name']} · score {risk['risk_score']}",
         })
 
     drills = []
-    for d in query_all(
+    for d in (query_all(
         """
         SELECT d.*, t.team_name, cp.checkpoint_code, cp.checkpoint_name, si.inspection_code
         FROM drills d
@@ -1218,7 +1273,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         LEFT JOIN safety_inspections si ON si.id = d.inspection_id
         ORDER BY d.scheduled_at DESC
         """
-    ):
+    ) if load_drills else []):
         label, css = _title_status(d["status"])
         icon = {"fire": "fa-fire", "earthquake": "fa-house-chimney", "lockdown": "fa-lock", "medical": "fa-kit-medical"}.get(d["drill_type"], "fa-person-running")
         drills.append({
@@ -1239,13 +1294,13 @@ def get_safety_dashboard(section="overview", status_filter=None):
         })
 
     plans = []
-    for p in query_all(
+    for p in (query_all(
         """SELECT ep.*, b.building_name, z.zone_name AS assembly
            FROM evacuation_plans ep
            JOIN buildings b ON b.id = ep.building_id
            LEFT JOIN campus_zones z ON z.id = ep.primary_assembly_zone_id
            ORDER BY ep.id DESC"""
-    ):
+    ) if load_plans else []):
         plans.append({
             "id": p["id"],
             "building": p["building_name"],
@@ -1257,11 +1312,11 @@ def get_safety_dashboard(section="overview", status_filter=None):
         })
 
     activity = []
-    for a in query_all(
+    for a in (query_all(
         """SELECT al.*, u.full_name FROM audit_logs al
            LEFT JOIN users u ON u.id = al.user_id
            ORDER BY al.created_at DESC LIMIT 50"""
-    ):
+    ) if load_activity else []):
         when = a["created_at"]
         day = "Today" if when.date() == datetime.now().date() else when.strftime("%b %d")
         activity.append({
@@ -1270,13 +1325,19 @@ def get_safety_dashboard(section="overview", status_filter=None):
             "module": (a.get("entity_type") or "system"),
         })
 
+    operational = _operational_metrics() if section != "visitors" else {
+        "coverage": 0, "completed": 0, "planned": 0, "missed": 0,
+        "active_routes": 0, "readiness": 0, "avg_response": "—",
+        "covered_checkpoints": 0, "checkpoint_total": 0,
+    }
     latest_route = query_one(
         """SELECT pr.*, t.team_name FROM patrol_routes pr
            LEFT JOIN patrol_teams t ON t.id = pr.team_id
            ORDER BY pr.created_at DESC LIMIT 1"""
-    )
+    ) if load_route else None
     sequence = []
     route_geometry = None
+    weights = []
     if latest_route:
         route_json = latest_route.get("route_json")
         if isinstance(route_json, str):
@@ -1289,7 +1350,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         stops = route_json.get("sequence") or []
         for stop in stops:
             sequence.append(stop)
-        metrics = _operational_metrics()
+        metrics = operational
         patrol_meta = {
             "coverage": metrics["coverage"],
             "completed": metrics["completed"],
@@ -1306,7 +1367,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
         }
     else:
         # Build preview sequence from risk weights
-        weights = risk_scoring.checkpoint_priority_weights()
+        weights = risk_scoring.checkpoint_priority_weights() if load_route else []
         start = next((c for c in weights if c["code"] == "OSAS"), weights[0] if weights else None)
         ranked = [c for c in weights if not start or c["checkpoint_id"] != start["checkpoint_id"]][:4]
         sequence = []
@@ -1316,7 +1377,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
             sequence.append({"label": f"{idx:02d}", "name": f"{cp['code']} · {cp['name']}", "code": cp["code"], "risk": cp["score"], "tone": cp["tone"], "lat": cp["lat"], "lng": cp["lng"]})
         if start:
             sequence.append({"label": "END", "name": start["name"], "code": start["code"], "risk": None, "tone": None, "lat": start["lat"], "lng": start["lng"]})
-        metrics = _operational_metrics()
+        metrics = operational
         patrol_meta = {
             "coverage": metrics["coverage"],
             "completed": metrics["completed"],
@@ -1333,15 +1394,22 @@ def get_safety_dashboard(section="overview", status_filter=None):
         }
 
     zones = []
-    for z in query_all(
+    zone_incident_counts = {}
+    if load_zones:
+        zone_incident_counts = {
+            row["zone_id"]: row["c"]
+            for row in query_all(
+                """SELECT zone_id, COUNT(*) AS c FROM incidents
+                   WHERE status IN ('reported','verified','responding')
+                   GROUP BY zone_id"""
+            )
+        }
+    for z in (query_all(
         "SELECT * FROM campus_zones WHERE active=1 ORDER BY risk_score DESC LIMIT 5"
-    ):
+    ) if load_zones else []):
         score = float(z["risk_score"] or 0)
         tone = "danger" if score >= 80 else "warning" if score >= 65 else "success"
-        open_inc = query_one(
-            "SELECT COUNT(*) AS c FROM incidents WHERE zone_id=%s AND status IN ('reported','verified','responding')",
-            (z["id"],),
-        )["c"]
+        open_inc = zone_incident_counts.get(z["id"], 0)
         zones.append({
             "name": z["zone_name"],
             "score": int(round(score)),
@@ -1350,30 +1418,55 @@ def get_safety_dashboard(section="overview", status_filter=None):
             "code": z["zone_code"],
         })
 
-    open_incidents = sum(1 for i in all_incidents if i["status_key"] in ("reported", "verified", "responding"))
-    high_priority = sum(1 for i in all_incidents if i.get("priority") in ("high", "critical") and i["status_key"] not in ("resolved", "closed"))
-    critical_open = sum(1 for i in all_incidents if i.get("priority") == "critical" and i["status_key"] not in ("resolved", "closed"))
-    active_incidents = [i for i in all_incidents if i["status_key"] in ("reported", "verified", "responding")]
-    guards = query_one("SELECT COUNT(*) AS c FROM users WHERE role IN ('guard','security_head') AND account_status='active'")["c"]
-    operational = _operational_metrics()
+    counts = {"reported": 0, "verified": 0, "responding": 0, "resolved": 0, "closed": 0}
+    if load_incidents:
+        for incident in all_incidents:
+            counts[incident["status_key"]] = counts.get(incident["status_key"], 0) + 1
+        open_incidents = sum(counts.get(status, 0) for status in ("reported", "verified", "responding"))
+        high_priority = sum(1 for i in all_incidents if i.get("priority") in ("high", "critical") and i["status_key"] not in ("resolved", "closed"))
+        critical_open = sum(1 for i in all_incidents if i.get("priority") == "critical" and i["status_key"] not in ("resolved", "closed"))
+        active_incidents = [i for i in all_incidents if i["status_key"] in ("reported", "verified", "responding")]
+    elif section in {"reports", "activity", "visitors"}:
+        incident_summary = query_one("""SELECT
+            SUM(CASE WHEN status='reported' THEN 1 ELSE 0 END) AS reported,
+            SUM(CASE WHEN status='verified' THEN 1 ELSE 0 END) AS verified,
+            SUM(CASE WHEN status='responding' THEN 1 ELSE 0 END) AS responding,
+            SUM(CASE WHEN status='resolved' THEN 1 ELSE 0 END) AS resolved,
+            SUM(CASE WHEN status='closed' THEN 1 ELSE 0 END) AS closed,
+            SUM(CASE WHEN priority IN ('high','critical') AND status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS high_priority,
+            SUM(CASE WHEN priority='critical' AND status NOT IN ('resolved','closed') THEN 1 ELSE 0 END) AS critical_open
+            FROM incidents""") or {}
+        counts = {key: int(incident_summary.get(key) or 0) for key in counts}
+        open_incidents = counts["reported"] + counts["verified"] + counts["responding"]
+        high_priority = int(incident_summary.get("high_priority") or 0)
+        critical_open = int(incident_summary.get("critical_open") or 0)
+        active_incidents = []
+    else:
+        open_incidents = high_priority = critical_open = 0
+        active_incidents = []
+    guards_row = query_one("SELECT COUNT(*) AS c FROM users WHERE role IN ('guard','security_head') AND account_status='active'") if section == "teams" else {"c": 0}
+    guards = int((guards_row or {}).get("c") or 0)
     readiness = operational["readiness"]
-    avg_risk = round(sum(c["risk"] for c in display_checkpoints) / max(1, len(display_checkpoints)), 1) if display_checkpoints else 0
-    on_duty_teams = sum(1 for t in teams if t["status"] == "On duty")
-    standby_teams = max(0, len(teams) - on_duty_teams)
-    insp_scheduled = sum(1 for i in inspections if i["status"] == "Scheduled")
-    insp_completed = sum(1 for i in inspections if i["status"] == "Completed")
-    insp_followups = sum(1 for i in inspections if i["status"] == "Follow-up")
-    insp_compliance = round((insp_completed / len(inspections)) * 100) if inspections else 0
-    drills_upcoming = sum(1 for d in drills if d["status"] in ("Planned", "Scheduled"))
-    drills_completed = sum(1 for d in drills if d["status"] == "Completed")
-    drill_completion = round((drills_completed / len(drills)) * 100) if drills else 0
+    avg_risk = round(sum(c["risk"] for c in display_checkpoints) / len(display_checkpoints), 1) if display_checkpoints else (round(sum(z["score"] for z in zones) / len(zones), 1) if zones else 0)
+    team_count = len(teams) if load_teams else int(operational.get("team_total") or 0)
+    on_duty_teams = sum(1 for t in teams if t["status"] == "On duty") if load_teams else int(operational.get("team_on_duty") or 0)
+    standby_teams = max(0, team_count - on_duty_teams)
+    inspection_total = len(inspections) if load_inspections else int(operational.get("inspection_total") or 0)
+    insp_scheduled = sum(1 for i in inspections if i["status"] == "Scheduled") if load_inspections else int(operational.get("inspection_scheduled") or 0)
+    insp_completed = sum(1 for i in inspections if i["status"] == "Completed") if load_inspections else int(operational.get("inspection_completed") or 0)
+    insp_followups = sum(1 for i in inspections if i["status"] == "Follow-up") if load_inspections else int(operational.get("inspection_overdue") or 0)
+    insp_compliance = round((insp_completed / inspection_total) * 100) if inspection_total else 0
+    drill_total = len(drills) if load_drills else int(operational.get("drill_total") or 0)
+    drills_upcoming = sum(1 for d in drills if d["status"] in ("Planned", "Scheduled")) if load_drills else int(operational.get("drill_upcoming") or 0)
+    drills_completed = sum(1 for d in drills if d["status"] == "Completed") if load_drills else int(operational.get("drill_completed") or 0)
+    drill_completion = round((drills_completed / drill_total) * 100) if drill_total else 0
     active_plans = sum(1 for p in plans if p["status"] == "Approved")
+    activity_count = len(activity) if load_activity else int(operational.get("activity_total") or 0)
     activity_today = sum(1 for a in activity if str(a.get("detail", "")).startswith("Today"))
     modules_touched = len({(a.get("module") or "system").lower() for a in activity})
+    actions_count = len(actions) if load_actions else int(operational.get("actions_total") or 0)
 
-    counts = {"reported": 0, "verified": 0, "responding": 0, "resolved": 0, "closed": 0}
-    for i in all_incidents:
-        counts[i["status_key"]] = counts.get(i["status_key"], 0) + 1
+    incident_total = sum(counts.values())
     resolved_closed = counts.get("resolved", 0) + counts.get("closed", 0)
 
     if status_filter in counts:
@@ -1420,7 +1513,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
             {"label": "Active Incidents", "value": f"{open_incidents:02d}", "hint": f"{high_priority} require immediate attention", "updated": last_updated_label, "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
             {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": coverage_hint, "updated": last_updated_label, "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
             {"label": "Personnel on Duty", "value": f"{on_duty_teams:02d}", "hint": f"{on_duty_teams} active · {standby_teams} standby", "updated": last_updated_label, "theme": "indigo", "icon": "fa-user-shield", "url": u["teams"]},
-            {"label": "Campus Readiness", "value": f"{readiness}%", "hint": f"{len(actions)} actions pending · {insp_completed}/{max(len(inspections),1)} inspections done" if inspections else f"{len(actions)} actions pending", "updated": last_updated_label, "theme": "amber", "icon": "fa-shield-heart", "url": u["emergency"]},
+            {"label": "Campus Readiness", "value": f"{readiness}%", "hint": f"{len(actions)} actions pending · {insp_completed}/{max(inspection_total,1)} inspections done" if inspections else f"{len(actions)} actions pending", "updated": last_updated_label, "theme": "amber", "icon": "fa-shield-heart", "url": u["emergency"]},
         ],
         "incidents": [
             {"label": "Reported", "value": f"{counts.get('reported', 0):02d}", "hint": "Awaiting verification", "updated": last_updated_label, "theme": "red", "icon": "fa-bullhorn", "url": f"{u['incidents']}?status=reported"},
@@ -1459,10 +1552,10 @@ def get_safety_dashboard(section="overview", status_filter=None):
             {"label": "Checkpoints", "value": f"{len(display_checkpoints)}", "hint": f"Avg risk {avg_risk} · {covered_cp} scanned (7d)", "updated": last_updated_label, "theme": "red", "icon": "fa-location-crosshairs", "url": f"{u['teams']}#checkpoints-panel"},
         ],
         "reports": [
-            {"label": "Incident Records", "value": f"{len(all_incidents):02d}", "hint": f"{open_incidents} still open", "updated": last_updated_label, "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
+            {"label": "Incident Records", "value": f"{incident_total:02d}", "hint": f"{open_incidents} still open", "updated": last_updated_label, "theme": "red", "icon": "fa-triangle-exclamation", "url": u["incidents"]},
             {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": coverage_hint, "updated": last_updated_label, "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
-            {"label": "Inspection Rate", "value": f"{insp_compliance}%", "hint": f"{insp_completed}/{len(inspections)} completed" if inspections else "No inspections yet", "updated": last_updated_label, "theme": "amber", "icon": "fa-clipboard-check", "url": u["inspections"]},
-            {"label": "Drill Completion", "value": f"{drill_completion}%", "hint": f"{drills_completed}/{len(drills)} drills done" if drills else "No drills yet", "updated": last_updated_label, "theme": "indigo", "icon": "fa-person-running", "url": u["emergency"]},
+            {"label": "Inspection Rate", "value": f"{insp_compliance}%", "hint": f"{insp_completed}/{inspection_total} completed" if inspection_total else "No inspections yet", "updated": last_updated_label, "theme": "amber", "icon": "fa-clipboard-check", "url": u["inspections"]},
+            {"label": "Drill Completion", "value": f"{drill_completion}%", "hint": f"{drills_completed}/{drill_total} drills done" if drill_total else "No drills yet", "updated": last_updated_label, "theme": "indigo", "icon": "fa-person-running", "url": u["emergency"]},
         ],
         "activity": [
             {"label": "Recent Actions", "value": f"{len(activity):02d}", "hint": "Audit feed window", "updated": last_updated_label, "theme": "amber", "icon": "fa-list-check", "url": f"{u['activity']}#activity-feed"},
@@ -1490,16 +1583,16 @@ def get_safety_dashboard(section="overview", status_filter=None):
         {
             "title": f"Campus readiness {readiness}%",
             "detail": (
-                f"Inspections {insp_compliance}% · drills {drill_completion}% · {len(actions)} OSAS actions"
+                f"Inspections {insp_compliance}% · drills {drill_completion}% · {actions_count} OSAS actions"
                 + (f" · top risk {zones[0]['name']} ({zones[0]['score']})" if zones else "")
             ),
         },
     ]
     report_types = [
-        {"key": "incidents", "label": "Incident Summary", "hint": f"{len(all_incidents)} records · {open_incidents} open"},
+        {"key": "incidents", "label": "Incident Summary", "hint": f"{incident_total} records · {open_incidents} open"},
         {"key": "patrol", "label": "Patrol Completion", "hint": f"{patrol_meta['coverage']}% coverage · {covered_cp}/{total_cp or 0} scanned"},
-        {"key": "inspections", "label": "Inspection Compliance", "hint": f"{insp_compliance}% · {len(inspections)} inspections"},
-        {"key": "audit", "label": "Audit Log", "hint": f"{len(activity)} recent actions"},
+        {"key": "inspections", "label": "Inspection Compliance", "hint": f"{insp_compliance}% · {inspection_total} inspections"},
+        {"key": "audit", "label": "Audit Log", "hint": f"{activity_count} recent actions"},
     ]
     visitors = visitor_service.list_visitors() if section == "visitors" else []
     if section == "visitors":
@@ -1560,12 +1653,13 @@ def get_safety_dashboard(section="overview", status_filter=None):
             zones=zones,
             on_duty_teams=on_duty_teams,
             team_count=len(teams_options),
-            actions_count=len(actions),
+            actions_count=actions_count,
             avg_risk=avg_risk,
         )
     if section in ("overview", "patrol"):
         top_cp = None
-        weights = risk_scoring.checkpoint_priority_weights()
+        if not weights:
+            weights = risk_scoring.checkpoint_priority_weights()
         if weights:
             top_cp = risk_scoring.explain_checkpoint_score(weights[0]["checkpoint_id"])
         risk_demo = {
