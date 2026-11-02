@@ -1,6 +1,6 @@
 # OSAS Campus Safety and Security Management System
 
-A standalone campus safety and security management system for Bestlink College of the Philippines, built from the LMS capstone template architecture: Flask, Jinja, Tailwind CSS, JavaScript, MySQL, Flask-Login, and RBAC. Library modules have been replaced by OSAS and campus-security modules.
+A standalone campus safety and security management system for Bestlink College of the Philippines, built from the LMS capstone template architecture: Flask, Jinja, Tailwind CSS, JavaScript, PostgreSQL, Flask-Login, and RBAC. Library modules have been replaced by OSAS and campus-security modules.
 
 ## Modules
 
@@ -18,12 +18,13 @@ A standalone campus safety and security management system for Bestlink College o
 
 ```bash
 pip install -r requirements.txt
-mysql -u root -p < schema.sql
+createdb osas_bcp
+copy .env.example .env
 python init_db.py
 python app.py
 ```
 
-The database name is `osas_bcp`. Demo accounts created by `init_db.py` use password `password123`.
+The database name is `osas_bcp`. Deploy login (admin): `software.engineer` / `Engineer@OSAS2026`. Local demo also seeds `admin` and `security.head` with `password123`.
 
 Copy `.env.example` to `.env` for local overrides.
 
@@ -32,9 +33,9 @@ The login flow does not create a Flask-Login session after password verification
 
 ## Verification and documentation
 
-Run the unit and mocked-integration checks with `python -m pytest tests/ -v`. Tests that exercise MySQL-backed workflows are skipped when no test database is configured. The current role matrix, feature-status inventory, and risk-scoring specification are maintained in `docs/RBAC_ROLE_MATRIX.md`, `docs/FEATURE_STATUS.md`, and `docs/RISK_MODEL_SPEC.md`.
+Run the unit and mocked-integration checks with `python -m pytest tests/ -v`. Tests use an in-memory SQLite schema. The current role matrix, feature-status inventory, and risk-scoring specification are maintained in `docs/RBAC_ROLE_MATRIX.md`, `docs/FEATURE_STATUS.md`, and `docs/RISK_MODEL_SPEC.md`.
 
 ## Deploy
 
-- **Railway (recommended):** [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md) — Flask + MySQL in one project  
-- **Render:** [docs/RENDER_DEPLOY.md](docs/RENDER_DEPLOY.md) — web on Render + external MySQL  
+- **Render:** [docs/RENDER_DEPLOY.md](docs/RENDER_DEPLOY.md) — Flask + Render Postgres (`render.yaml` Blueprint)  
+- **Railway:** [docs/RAILWAY_DEPLOY.md](docs/RAILWAY_DEPLOY.md) — Flask + PostgreSQL in one project  

@@ -2,8 +2,8 @@
 builder = "NIXPACKS"
 
 [deploy]
-# Bootstrap schema over Railway private MySQL, then serve.
-startCommand = "python scripts/railway_bootstrap.py && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120"
+# Bootstrap schema over PostgreSQL, then serve.
+startCommand = "python scripts/db_bootstrap.py && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120"
 healthcheckPath = "/api/health"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5

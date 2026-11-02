@@ -1988,7 +1988,8 @@ def generate_route(patrol_date, team_name, start_code, duration, actor="OSAS Adm
         execute(
             """INSERT INTO patrol_route_checkpoints (route_id, checkpoint_id, sequence_no, priority_score)
                VALUES (%s,%s,%s,%s)
-               ON DUPLICATE KEY UPDATE sequence_no=VALUES(sequence_no), priority_score=VALUES(priority_score)""",
+               ON CONFLICT (route_id, checkpoint_id) DO UPDATE SET
+                 sequence_no=EXCLUDED.sequence_no, priority_score=EXCLUDED.priority_score""",
             (rid, stop["checkpoint_id"], seq_no, stop.get("risk") or 0),
         )
         seq_no += 1

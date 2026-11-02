@@ -1,13 +1,13 @@
-# Deploy OSAS on Railway (recommended)
+# Deploy OSAS on Railway
 
-Railway can run **both** the Flask app and **MySQL** in one project — simpler than Render for this codebase.
+Railway can run **both** the Flask app and **PostgreSQL** in one project.
 
 ## Architecture
 
 ```text
 GitHub → Railway Project
             ├── Web service (Gunicorn + Flask)
-            └── MySQL database
+            └── PostgreSQL
 ```
 
 ## 1. Push the project to GitHub
@@ -20,131 +20,49 @@ git remote add origin https://github.com/YOUR_USERNAME/OSAS.git
 git push -u origin main
 ```
 
-(Skip `remote add` if origin already exists — just `git push`.)
-
 ## 2. Create a Railway project
 
 1. Go to [railway.app](https://railway.app) and sign in with GitHub  
-2. **New Project** → **Deploy from GitHub repo** → select **OSAS**  
-3. Railway will detect Python and deploy the web service  
+2. **New Project** → **Deploy from GitHub repo** → select **OSAS**
 
-## 3. Add MySQL
+## 3. Add PostgreSQL
 
-1. In the same project: **+ New** → **Database** → **MySQL**  
-2. Wait until MySQL is healthy  
+1. In the same project: **+ New** → **Database** → **PostgreSQL**  
+2. Wait until Postgres is healthy  
 
-## 4. Connect the web service to MySQL
+## 4. Connect the web service
 
-Open the **web service** → **Variables** → **Add Variable** / **Variable Reference**:
-
-Easiest: reference the MySQL service variables.
-
-| App variable | Source (MySQL service) |
-|--------------|-------------------------|
-| `MYSQLHOST` | `${{MySQL.MYSQLHOST}}` |
-| `MYSQLPORT` | `${{MySQL.MYSQLPORT}}` |
-| `MYSQLUSER` | `${{MySQL.MYSQLUSER}}` |
-| `MYSQLPASSWORD` | `${{MySQL.MYSQLPASSWORD}}` |
-| `MYSQLDATABASE` | `${{MySQL.MYSQLDATABASE}}` |
-
-Or set one URL if Railway shows `MYSQL_URL` / `DATABASE_URL`:
+On the **web** service → **Variables**:
 
 ```text
-MYSQL_URL=${{MySQL.MYSQL_URL}}
+DATABASE_URL=${{Postgres.DATABASE_URL}}
 ```
 
-Also set these on the **web** service:
+Also set:
 
 | Key | Value |
 |-----|--------|
 | `FLASK_ENV` | `production` |
 | `FLASK_DEBUG` | `0` |
-| `SECRET_KEY` | click Generate / paste a long random string |
+| `SECRET_KEY` | generate a long random string |
 | `SESSION_COOKIE_SECURE` | `1` |
-| `SHOW_DEMO_CREDENTIALS` | `0` |
-| `MYSQL_SSL` | `0` (usually fine for private Railway MySQL) |
+| `OTP_ENABLED` | `0` |
+| `PGSSL` | `0` (private Railway network) |
+| `SEED_USERNAME` | `software.engineer` |
+| `SEED_PASSWORD` | `Engineer@OSAS2026` |
 
-Start command (if Railway asks / under Settings):
-
-```bash
-gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
-```
-
-(`Procfile` already defines this.)
-
-## 5. Import the database schema
-
-### Option A — Railway CLI + local mysql client
-
-1. Install [Railway CLI](https://docs.railway.app/guides/cli)  
-2. From the project folder:
+Start command (`Procfile` already has this):
 
 ```bash
-railway link
-railway connect MySQL
+python scripts/db_bootstrap.py && gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
 ```
 
-Then in the MySQL shell, or:
+Bootstrap creates tables and the software-engineer account on first deploy.
 
-```bash
-# After linking, use public TCP proxy / connection URL from MySQL → Connect
-mysql -h <PUBLIC_HOST> -P <PORT> -u <USER> -p <DATABASE> < schema.sql
-```
-
-### Option B — Temporary local `.env` pointing at Railway
-
-1. MySQL service → **Connect** → copy **public** host/port/user/password/database  
-2. Put them in a local `.env`  
-3. Run:
-
-```bash
-mysql -h HOST -P PORT -u USER -p DATABASE < schema.sql
-python init_db.py
-```
-
-That creates tables + demo users (`admin` / `security.head`, password `password123`).
-
-**Change those passwords** after first login (or create a new admin and disable demos).
-
-## 6. Generate a public URL
+## 5. Public URL
 
 Web service → **Settings** → **Networking** → **Generate Domain**
 
-Open:
+Login: `software.engineer` / `Engineer@OSAS2026`
 
-```text
-https://YOUR-APP.up.railway.app
-```
-
-Health check:
-
-```text
-https://YOUR-APP.up.railway.app/api/health
-```
-
-## 7. Redeploy after env changes
-
-After saving variables, trigger a redeploy (Deployments → Redeploy) so the app picks them up.
-
-## Troubleshooting
-
-| Issue | Fix |
-|-------|-----|
-| App boots but DB errors | Confirm MySQL vars are on the **web** service, not only on MySQL |
-| `Unknown database` | Import `schema.sql` first |
-| Build fails on gunicorn | Ensure `requirements.txt` includes `gunicorn==23.0.0` and was pushed |
-| Login cookie problems | `FLASK_ENV=production` + `SESSION_COOKIE_SECURE=1` + HTTPS domain |
-| Sleep / cold start | Free/hobby plans may sleep; first hit can be slow |
-
-## Defense checklist
-
-- [ ] Public URL opens  
-- [ ] `/api/health` OK  
-- [ ] Login works  
-- [ ] Dashboard / incidents / patrol load  
-- [ ] Demo password changed or new admin created  
-- [ ] Strong `SECRET_KEY` set  
-
-## Note on uploads
-
-Railway disk can be ephemeral depending on plan. Profile photos / attachments may not persist forever on free tiers — fine for demos; use object storage later if needed.
+Health: `https://YOUR-APP.up.railway.app/api/health`

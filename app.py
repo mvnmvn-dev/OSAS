@@ -1,6 +1,7 @@
 from datetime import datetime
 import logging
 import os
+import sys
 from flask import Flask, jsonify, render_template, request
 from flask_login import LoginManager, current_user, login_required
 from flask_wtf.csrf import CSRFProtect
@@ -111,16 +112,21 @@ def create_app():
 
 app = create_app()
 
-# Ensure schema/seed exist when MySQL is reachable (Railway private network).
-if os.getenv("AUTO_DB_BOOTSTRAP", "1").lower() in ("1", "true", "yes") and not app.config.get("TESTING"):
+# Ensure schema/seed exist when PostgreSQL is reachable (Render / Railway).
+_skip_bootstrap = "pytest" in sys.modules or os.getenv("PYTEST_CURRENT_TEST")
+if (
+    os.getenv("AUTO_DB_BOOTSTRAP", "1").lower() in ("1", "true", "yes")
+    and not app.config.get("TESTING")
+    and not _skip_bootstrap
+):
     try:
         from scripts.railway_bootstrap import bootstrap_with_app
         bootstrap_with_app(app)
     except Exception:
         logger.exception(
-            "DB bootstrap failed (host=%s db=%s). Login will fail until MySQL vars are fixed.",
-            app.config.get("MYSQL_HOST"),
-            app.config.get("MYSQL_DATABASE"),
+            "DB bootstrap failed (host=%s db=%s). Login will fail until DATABASE_URL / PG* vars are fixed.",
+            app.config.get("PGHOST"),
+            app.config.get("PGDATABASE"),
         )
 if __name__ == '__main__':
     # Prefer FLASK_DEBUG / Config.DEBUG. Never force debug in production.

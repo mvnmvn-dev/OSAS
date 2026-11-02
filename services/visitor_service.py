@@ -10,7 +10,7 @@ from services.audit_service import write_audit
 
 
 def ensure_visitor_schema():
-    id_column = "INTEGER PRIMARY KEY AUTOINCREMENT" if current_app.config.get("TESTING") else "INT AUTO_INCREMENT PRIMARY KEY"
+    id_column = "INTEGER PRIMARY KEY AUTOINCREMENT" if current_app.config.get("TESTING") else "SERIAL PRIMARY KEY"
     execute(
         f"""CREATE TABLE IF NOT EXISTS visitors (
             id {id_column},
@@ -21,12 +21,12 @@ def ensure_visitor_schema():
             purpose VARCHAR(180) NOT NULL,
             host_name VARCHAR(150) NOT NULL,
             visit_date DATE NOT NULL,
-            valid_until DATETIME NOT NULL,
+            valid_until TIMESTAMP NOT NULL,
             status VARCHAR(20) NOT NULL DEFAULT 'registered',
-            entry_at DATETIME NULL,
-            exit_at DATETIME NULL,
+            entry_at TIMESTAMP NULL,
+            exit_at TIMESTAMP NULL,
             registered_by INTEGER NULL,
-            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (registered_by) REFERENCES users(id) ON DELETE SET NULL
         )"""
     )
