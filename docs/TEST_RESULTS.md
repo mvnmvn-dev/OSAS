@@ -29,7 +29,7 @@ pytest tests/ -v
 
 ## Notes
 
-- Integration tests that touch MySQL require a configured local database (`MYSQL_*` in `.env`).
+- Live PostgreSQL is not required for `tests/`; those cases use SQLite. Deploy uses `DATABASE_URL` / `PG*`.
 - OSRM tests use mocked HTTP / heuristic fallback and do not require a live OSRM container.
 - Four additional pure workflow-rule tests are now included in `tests/test_workflow_rules.py`; rerun the command below in a Python-enabled environment before reporting a new total.
 - Only report results as current if the same suite still passes on the defense machine.

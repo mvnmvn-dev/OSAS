@@ -95,8 +95,7 @@ def login():
         except Exception:
             current_app.logger.exception("Login failed due to database error")
             error = (
-                "Database unavailable. On Railway, set web MYSQL_HOST / MYSQL_PASSWORD "
-                "from the MySQL service (private network), then redeploy."
+                "Database unavailable. Set DATABASE_URL to your Render or Railway PostgreSQL connection string, then redeploy."
             )
 
     return render_template(

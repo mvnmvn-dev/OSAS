@@ -55,8 +55,8 @@ def health():
 
     db = {
         "ok": False,
-        "host": current_app.config.get("MYSQL_HOST"),
-        "database": current_app.config.get("MYSQL_DATABASE"),
+        "host": current_app.config.get("PGHOST"),
+        "database": current_app.config.get("PGDATABASE"),
     }
     try:
         query_one("SELECT 1 AS ok")

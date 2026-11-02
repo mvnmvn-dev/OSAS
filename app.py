@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
-    app.config.setdefault('MYSQL_DATABASE', Config.MYSQL_DATABASE)
+    app.config.setdefault('PGDATABASE', Config.PGDATABASE)
+    app.config.setdefault('MYSQL_DATABASE', Config.PGDATABASE)
     # Trust Render / reverse-proxy HTTPS headers so secure cookies work
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     os.makedirs(app.config.get('UPLOAD_FOLDER', 'static/uploads'), exist_ok=True)

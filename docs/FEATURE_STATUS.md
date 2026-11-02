@@ -23,7 +23,7 @@ This inventory keeps the defense and deployment description aligned with the cur
 - Incident attachments are validated and stored on the application filesystem; managed hosting may use ephemeral disks.
 - QR/token scanning is implemented through code/token input. NFC and GPS are stored as method labels only; no hardware integration is present.
 - OSRM route quality depends on a reachable campus routing service and suitable map data.
-- Integration tests require a configured MySQL database; unit tests and mocked routing tests can run without live external services.
+- Unit tests and mocked routing tests run against SQLite without a live PostgreSQL instance.
 - Dashboard analytics reflect available database records and should not be treated as evidence of improved campus safety without a separate evaluation.
 
 ## Future or research work
