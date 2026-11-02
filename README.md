@@ -12,6 +12,7 @@ A standalone campus safety and security management system for Bestlink College o
 - Reports and Analytics: incident trends, patrol coverage, risk heatmaps, readiness scores, compliance evidence, and audit logs.
 - Workflow safeguards: sequential incident transitions, required resolution notes, role-restricted closure, and duplicate checkpoint-scan rejection.
 - Explainable risk API: `GET /api/risk/checkpoints/<checkpoint_id>/explanation` for checkpoint-level scoring factors.
+- Password login is followed by a short-lived, single-use email OTP when `OTP_ENABLED=1`; configure SMTP variables before enabling this in production.
 
 ## Setup
 
@@ -25,6 +26,9 @@ python app.py
 The database name is `osas_bcp`. Demo accounts created by `init_db.py` use password `password123`.
 
 Copy `.env.example` to `.env` for local overrides.
+
+### Login MFA
+The login flow does not create a Flask-Login session after password verification. It creates a database-backed OTP challenge first; only a valid, unexpired code completes the session. OTP hashes are stored with an HMAC derived from `SECRET_KEY`, codes are invalidated after use or too many attempts, and SMTP delivery is required in production. In development without SMTP, the code is written to the application log for local testing only.
 
 ## Verification and documentation
 

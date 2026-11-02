@@ -6,6 +6,7 @@ from flask_login import current_user, login_required, login_user, logout_user
 from models.user import User
 from services.analytics_service import log_event
 from services.auth_service import clear_login_attempts, is_account_locked, is_safe_redirect, record_failed_login
+from services.otp_service import issue_login_otp, verify_login_otp
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -65,14 +66,29 @@ def login():
                 record_failed_login(username, user.id)
             elif user and user.check_password(password):
                 clear_login_attempts(user.id)
-                session.permanent = True
-                login_user(user)
-                if user.must_change_password:
-                    return redirect(url_for("auth.change_password"))
-                next_page = request.args.get("next")
-                if next_page and is_safe_redirect(next_page, request.host_url):
-                    return redirect(next_page)
-                return redirect(url_for("dashboard.index"))
+                if current_app.config.get("OTP_ENABLED", True) and not current_app.config.get("TESTING"):
+                    session.clear()
+                    session["pending_otp_user_id"] = user.id
+                    session["pending_otp_next"] = request.args.get("next", "")
+                    try:
+                        challenge = issue_login_otp(user.id, user.email, request.remote_addr)
+                    except Exception:
+                        current_app.logger.exception("Unable to issue login OTP")
+                        session.clear()
+                        error = "We could not send a verification code. Contact the OSAS administrator."
+                    else:
+                        session["pending_otp_challenge_id"] = challenge["challenge_id"]
+                        log_event("login_otp_requested", user_id=user.id)
+                        return redirect(url_for("auth.verify_otp"))
+                else:
+                    session.permanent = True
+                    login_user(user)
+                    if user.must_change_password:
+                        return redirect(url_for("auth.change_password"))
+                    next_page = request.args.get("next")
+                    if next_page and is_safe_redirect(next_page, request.host_url):
+                        return redirect(next_page)
+                    return redirect(url_for("dashboard.index"))
             else:
                 record_failed_login(username, user.id if user else None)
                 error = "Invalid username or password."
@@ -89,6 +105,55 @@ def login():
         login_bg_url=_login_bg_url(),
         show_demo_credentials=bool(current_app.config.get("SHOW_DEMO_CREDENTIALS")),
     )
+
+
+@auth_bp.route("/verify-otp", methods=["GET", "POST"])
+def verify_otp():
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard.index"))
+    user_id = session.get("pending_otp_user_id")
+    challenge_id = session.get("pending_otp_challenge_id")
+    if not user_id or not challenge_id:
+        return redirect(url_for("auth.login"))
+    error = None
+    if request.method == "POST":
+        valid, message = verify_login_otp(challenge_id, user_id, request.form.get("otp"), request.remote_addr)
+        if valid:
+            user = User.get_by_id(user_id)
+            next_page = session.get("pending_otp_next", "")
+            session.clear()
+            session.permanent = True
+            login_user(user)
+            log_event("login_succeeded", user_id=user.id)
+            if user.must_change_password:
+                return redirect(url_for("auth.change_password"))
+            if next_page and is_safe_redirect(next_page, request.host_url):
+                return redirect(next_page)
+            return redirect(url_for("dashboard.index"))
+        error = message
+    return render_template("auth/verify_otp.html", error=error)
+
+
+@auth_bp.post("/resend-otp")
+def resend_otp():
+    user_id = session.get("pending_otp_user_id")
+    if not user_id:
+        return redirect(url_for("auth.login"))
+    user = User.get_by_id(user_id)
+    if not user:
+        session.clear()
+        return redirect(url_for("auth.login"))
+    try:
+        challenge = issue_login_otp(user.id, user.email, request.remote_addr)
+        if not challenge.get("ok"):
+            flash("Please wait before requesting another code.", "error")
+        else:
+            session["pending_otp_challenge_id"] = challenge["challenge_id"]
+            flash("A new verification code was sent.", "success")
+    except Exception:
+        current_app.logger.exception("Unable to resend login OTP")
+        flash("We could not send a verification code. Contact the OSAS administrator.", "error")
+    return redirect(url_for("auth.verify_otp"))
 
 
 @auth_bp.route("/change-password", methods=["GET", "POST"])

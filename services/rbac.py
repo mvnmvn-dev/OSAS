@@ -10,7 +10,7 @@ ROLE_PERMISSIONS = {
     'faculty_staff': {'dashboard.view','safety.view','visitor.view','profile.manage_own'},
 }
 ROLE_LABELS = {'admin':'Administrator','security_head':'Security Head','guard':'Security Guard','safety_officer':'Safety Officer','faculty_staff':'Faculty / Staff'}
-PUBLIC_ENDPOINTS = frozenset({'auth.login','auth.logout','auth.index','auth.change_password','static','api.health'})
+PUBLIC_ENDPOINTS = frozenset({'auth.login','auth.logout','auth.index','auth.change_password','auth.verify_otp','auth.resend_otp','static','api.health'})
 ENDPOINT_PERMISSIONS = {
     'dashboard.index':'dashboard.view', 'safety.index':'safety.view', 'safety.osas':'safety.view', 'safety.log_incident':'safety.manage',
     'safety.patrol':'patrol.view', 'safety.teams':'patrol.view', 'safety.incidents':'safety.view', 'safety.inspections':'safety.view', 'safety.emergency':'safety.view', 'safety.reports':'reports.view', 'safety.activity':'reports.view',

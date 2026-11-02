@@ -162,6 +162,10 @@ def bootstrap_with_app(app=None) -> dict:
         print("Schema applied.")
     else:
         print("Schema already present — skipping create.")
+        if not table_exists(database, "login_otp_challenges"):
+            print("Applying login_otp_challenges migration ...")
+            apply_schema(database)
+            status["schema_applied"] = True
 
     print("Seeding demo users / campus (INSERT IGNORE) ...")
     _seed_users(database)

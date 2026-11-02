@@ -17,6 +17,20 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS login_otp_challenges (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  code_hash CHAR(64) NOT NULL,
+  purpose VARCHAR(40) NOT NULL DEFAULT 'login',
+  expires_at DATETIME NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  consumed_at DATETIME NULL,
+  requested_ip VARCHAR(45),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  INDEX idx_login_otp_user_active (user_id, purpose, consumed_at, expires_at)
+);
+
 CREATE TABLE IF NOT EXISTS buildings (
   id INT AUTO_INCREMENT PRIMARY KEY,
   building_code VARCHAR(30) NOT NULL UNIQUE,

@@ -36,6 +36,10 @@ class Config:
     PERMANENT_SESSION_LIFETIME = timedelta(minutes=int(os.getenv("SESSION_LIFETIME_MINUTES", "45")))
     MAX_LOGIN_ATTEMPTS = int(os.getenv("MAX_LOGIN_ATTEMPTS", "5"))
     LOGIN_LOCKOUT_MINUTES = int(os.getenv("LOGIN_LOCKOUT_MINUTES", "5"))
+    OTP_ENABLED = os.getenv("OTP_ENABLED", "1").lower() in ("1", "true", "yes")
+    OTP_EXPIRY_MINUTES = int(os.getenv("OTP_EXPIRY_MINUTES", "5"))
+    OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
+    OTP_RESEND_SECONDS = int(os.getenv("OTP_RESEND_SECONDS", "30"))
     WTF_CSRF_TIME_LIMIT = None
 
     # Session cookie hardening
