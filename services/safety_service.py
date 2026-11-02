@@ -863,8 +863,20 @@ def _operational_metrics():
         readiness = round(max(0, min(100, insp_score * .4 + drill_score * .3 + (100 - min(100, risk_score * 5)) * .3)))
     else:
         readiness = 0
-    response = query_one("""SELECT AVG(TIMESTAMPDIFF(MINUTE, reported_at, COALESCE(resolved_at, NOW()))) AS minutes
-                           FROM incidents WHERE reported_at >= NOW() - INTERVAL 30 DAY""") or {}
+    if current_app.config.get("TESTING"):
+        response = query_one(
+            """SELECT AVG((julianday(COALESCE(resolved_at, CURRENT_TIMESTAMP))
+                           - julianday(reported_at)) * 1440.0) AS minutes
+               FROM incidents WHERE reported_at >= datetime('now', '-30 days')"""
+        ) or {}
+    else:
+        # Keep this PostgreSQL-native: the shared TIMESTAMPDIFF translator
+        # cannot safely parse the nested COALESCE expression.
+        response = query_one(
+            """SELECT AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at, NOW())
+                           - reported_at)) / 60.0) AS minutes
+               FROM incidents WHERE reported_at >= CURRENT_TIMESTAMP - INTERVAL '30 days'"""
+        ) or {}
     minutes = response.get("minutes")
     return {
         "coverage": coverage,
