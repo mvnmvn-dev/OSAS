@@ -65,6 +65,26 @@ def list_visitors(limit=50):
     return [_row(r) for r in query_all("SELECT * FROM visitors ORDER BY created_at DESC LIMIT %s", (int(limit),))]
 
 
+def get_visitor_qr_data(visitor_id):
+    """Return the pass code only while a visitor pass is still usable."""
+    ensure_visitor_schema()
+    visitor = query_one(
+        "SELECT id, pass_code, status, valid_until FROM visitors WHERE id=%s",
+        (visitor_id,),
+    )
+    if not visitor or visitor.get("status") not in ("registered", "checked_in"):
+        return None
+    valid_until = visitor.get("valid_until")
+    if isinstance(valid_until, str):
+        try:
+            valid_until = datetime.fromisoformat(valid_until)
+        except ValueError:
+            return None
+    if valid_until and valid_until < datetime.now():
+        return None
+    return visitor
+
+
 def validate_pass(pass_code, actor_id=None, action="entry"):
     ensure_visitor_schema()
     visitor = query_one("SELECT * FROM visitors WHERE pass_code=%s", (pass_code.strip(),))

@@ -2204,6 +2204,15 @@ def save_checkpoint(code, name, method, actor="OSAS Administrator", user_id=None
     write_audit("Checkpoint saved", "checkpoint", cid, new_values={"code": code, "method": method})
 
 
+def get_checkpoint_qr_data(checkpoint_id):
+    """Return the active checkpoint's scan token for its QR label."""
+    return query_one(
+        """SELECT id, checkpoint_code, checkpoint_name, scan_token
+           FROM checkpoints WHERE id=%s AND active=1""",
+        (checkpoint_id,),
+    )
+
+
 def record_checkpoint_scan(token_or_code, guard_id=None, team_id=None, method="qr", notes=""):
     cp = query_one(
         "SELECT * FROM checkpoints WHERE scan_token=%s OR checkpoint_code=%s LIMIT 1",

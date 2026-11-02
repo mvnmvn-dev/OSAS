@@ -1,8 +1,10 @@
-from flask import Blueprint, current_app, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, Response, abort, current_app, flash, redirect, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
 from services.rbac import require_permission
 from services import safety_service as safety_svc
 from services import visitor_service
+from services.qr_service import make_qr_png
+from werkzeug.utils import secure_filename
 import os
 
 safety_bp = Blueprint('safety', __name__, url_prefix='/safety')
@@ -57,6 +59,37 @@ def _actor():
 
 def _uid():
     return getattr(current_user, 'id', None)
+
+
+def _qr_image_response(payload, filename):
+    response = Response(make_qr_png(payload), mimetype='image/png')
+    response.headers['Cache-Control'] = 'private, no-store, max-age=0'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    if request.args.get('download') == '1':
+        response.headers['Content-Disposition'] = f'attachment; filename="{secure_filename(filename)}"'
+    return response
+
+
+@safety_bp.route('/checkpoints/<int:checkpoint_id>/qr.png')
+@login_required
+@require_permission('patrol.view')
+def checkpoint_qr(checkpoint_id):
+    checkpoint = safety_svc.get_checkpoint_qr_data(checkpoint_id)
+    if not checkpoint or not checkpoint.get('scan_token'):
+        abort(404)
+    filename = f"checkpoint-{checkpoint['checkpoint_code']}-qr.png"
+    return _qr_image_response(checkpoint['scan_token'], filename)
+
+
+@safety_bp.route('/visitors/<int:visitor_id>/qr.png')
+@login_required
+@require_permission('visitor.view')
+def visitor_qr(visitor_id):
+    visitor = visitor_service.get_visitor_qr_data(visitor_id)
+    if not visitor or not visitor.get('pass_code'):
+        abort(404)
+    filename = f"visitor-pass-{visitor['pass_code']}-qr.png"
+    return _qr_image_response(visitor['pass_code'], filename)
 
 
 def page(section='overview'):

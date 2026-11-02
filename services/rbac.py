@@ -17,6 +17,7 @@ ENDPOINT_PERMISSIONS = {
     'safety.create_inspection':'safety.manage', 'safety.create_drill':'safety.manage', 'safety.create_plan':'safety.manage',
     'safety.generate_route':'patrol.manage', 'safety.save_team':'patrol.manage', 'safety.save_checkpoint':'patrol.manage',
     'safety.export_report':'reports.manage', 'safety.update_incident':'safety.manage', 'safety.assign_incident_team':'safety.manage', 'safety.visitors':'visitor.view', 'safety.register_visitor':'visitor.manage', 'safety.validate_visitor':'visitor.manage',
+    'safety.checkpoint_qr':'patrol.view', 'safety.visitor_qr':'visitor.view',
     'safety.attach_incident_file':'safety.manage', 'safety.notify_parent':'safety.manage', 'safety.scan_checkpoint':'patrol.manage',
     'notification_read':'profile.manage_own', 'notifications_read_all':'profile.manage_own',
     'profile.index':'profile.manage_own', 'profile.update':'profile.manage_own', 'profile.upload_photo':'profile.manage_own', 'profile.remove_photo':'profile.manage_own',
