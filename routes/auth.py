@@ -130,7 +130,14 @@ def verify_otp():
                 return redirect(next_page)
             return redirect(url_for("dashboard.index"))
         error = message
-    return render_template("auth/verify_otp.html", error=error)
+    pending_user = User.get_by_id(user_id)
+    return render_template(
+        "auth/verify_otp.html",
+        error=error,
+        registered_email=(pending_user.email if pending_user else ""),
+        expiry_minutes=int(current_app.config.get("OTP_EXPIRY_MINUTES", 5)),
+        resend_seconds=int(current_app.config.get("OTP_RESEND_SECONDS", 30)),
+    )
 
 
 @auth_bp.post("/resend-otp")

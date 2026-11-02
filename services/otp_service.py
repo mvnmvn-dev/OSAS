@@ -144,7 +144,7 @@ def verify_login_otp(challenge_id, user_id, code, requested_ip=None):
         execute("UPDATE login_otp_challenges SET consumed_at=%s WHERE id=%s", (now, challenge_id))
         return False, "Too many incorrect verification attempts. Request a new code."
     stored_ip = row.get("requested_ip")
-    if stored_ip and requested_ip and stored_ip != requested_ip:
+    if current_app.config.get("OTP_BIND_IP") and stored_ip and requested_ip and stored_ip != requested_ip:
         return False, "This verification request came from a different network. Request a new code."
     execute("UPDATE login_otp_challenges SET attempts=attempts+1 WHERE id=%s", (challenge_id,))
     supplied = str(code or "").strip()

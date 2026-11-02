@@ -39,7 +39,7 @@
       <p class="eyebrow" style="margin-top:1rem;">Additional authentication required</p>
       <h1 class="login-title" style="font-size:1.55rem;">Verify your sign-in</h1>
       <p class="login-tagline" style="margin-bottom:.25rem;">Enter the 6-digit code we sent to</p>
-      {% if masked_email %}<span class="otp-email"><i class="fas fa-envelope mr-1" aria-hidden="true"></i>{{ masked_email }}</span>{% else %}<span class="otp-email">your registered email</span>{% endif %}
+      {% if registered_email %}<span class="otp-email"><i class="fas fa-envelope mr-1" aria-hidden="true"></i>{{ registered_email }}</span>{% else %}<span class="otp-email">your registered email</span>{% endif %}
     </div>
 
     {% with messages = get_flashed_messages(with_categories=true) %}

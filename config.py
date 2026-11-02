@@ -59,6 +59,8 @@ class Config:
     OTP_EXPIRY_MINUTES = int(os.getenv("OTP_EXPIRY_MINUTES", "5"))
     OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
     OTP_RESEND_SECONDS = int(os.getenv("OTP_RESEND_SECONDS", "30"))
+    # Off by default: behind Render's proxies / mobile data the client IP can change between requests.
+    OTP_BIND_IP = os.getenv("OTP_BIND_IP", "0").lower() in ("1", "true", "yes")
     WTF_CSRF_TIME_LIMIT = None
 
     SESSION_COOKIE_HTTPONLY = True

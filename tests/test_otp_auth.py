@@ -46,6 +46,7 @@ def test_otp_is_hashed_and_single_use(app):
 
 def test_otp_rejects_different_ip(app):
     with app.app_context():
+        app.config["OTP_BIND_IP"] = True
         user = query_one("SELECT id, email FROM users WHERE username=%s", ("otp_user",))
         challenge = issue_login_otp(user["id"], user["email"], "127.0.0.1")
         code = app.extensions["test_delivered_otps"][-1]
