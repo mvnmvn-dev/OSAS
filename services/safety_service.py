@@ -824,11 +824,13 @@ def _last_data_timestamp():
 
 def _operational_metrics():
     """Calculate dashboard KPIs from current records instead of fixed demo values."""
-    routes = query_one("""SELECT COUNT(*) AS total, SUM(status='completed') AS completed,
-                                SUM(status IN ('assigned','in_progress')) AS active
+    routes = query_one("""SELECT COUNT(*) AS total,
+                                COUNT(*) FILTER (WHERE status = 'completed') AS completed,
+                                COUNT(*) FILTER (WHERE status IN ('assigned','in_progress')) AS active
                          FROM patrol_routes WHERE created_at >= NOW() - INTERVAL 7 DAY""") or {}
-    scans = query_one("""SELECT COUNT(*) AS total, SUM(result='valid') AS valid,
-                               SUM(result IN ('missed','late','invalid')) AS missed
+    scans = query_one("""SELECT COUNT(*) AS total,
+                               COUNT(*) FILTER (WHERE result = 'valid') AS valid,
+                               COUNT(*) FILTER (WHERE result IN ('missed','late','invalid')) AS missed
                         FROM patrol_logs WHERE scanned_at >= NOW() - INTERVAL 7 DAY""") or {}
     covered = query_one(
         """SELECT COUNT(DISTINCT checkpoint_id) AS c FROM patrol_logs
@@ -848,8 +850,8 @@ def _operational_metrics():
         coverage = round((covered_cp / checkpoint_total) * 100)
     else:
         coverage = 0
-    inspections = query_one("SELECT COUNT(*) AS total, SUM(status='completed') AS completed FROM safety_inspections") or {}
-    drills = query_one("SELECT COUNT(*) AS total, SUM(status='completed') AS completed FROM drills") or {}
+    inspections = query_one("SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed FROM safety_inspections") or {}
+    drills = query_one("SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE status = 'completed') AS completed FROM drills") or {}
     risks = query_one("SELECT AVG(risk_score) AS average FROM risk_assessments WHERE status IN ('open','mitigating')") or {}
     insp_total = int(inspections.get("total") or 0)
     drill_total = int(drills.get("total") or 0)
@@ -956,8 +958,8 @@ def _build_dashboard_analytics(
 
     patrol_rows = query_all(
         """SELECT DATE(scanned_at) AS day,
-                  SUM(result = 'valid') AS valid,
-                  SUM(result IN ('missed', 'late', 'invalid')) AS missed
+                  COUNT(*) FILTER (WHERE result = 'valid') AS valid,
+                  COUNT(*) FILTER (WHERE result IN ('missed', 'late', 'invalid')) AS missed
            FROM patrol_logs
            WHERE scanned_at >= CURDATE() - INTERVAL 6 DAY
            GROUP BY DATE(scanned_at)
