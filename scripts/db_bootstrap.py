@@ -1,21 +1,18 @@
 """Idempotent schema + seed for PostgreSQL (Render, Railway, local).
-
 Safe to run every deploy: applies schema.sql when `users` is missing, then seeds
 the software-engineer login and campus demo data.
 """
 from __future__ import annotations
-
 import os
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-
 import psycopg2  # noqa: E402
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT  # noqa: E402
 from werkzeug.security import generate_password_hash  # noqa: E402
-
 from config import Config  # noqa: E402
 
 SCHEMA = ROOT / "schema.sql"
@@ -91,6 +88,14 @@ def apply_schema(database: str) -> None:
             statement = statement.strip()
             if not statement:
                 continue
+
+            # A semicolon inside a SQL comment can leave a comment-only fragment.
+            # PostgreSQL treats executing that fragment as an empty query.
+            without_comments = re.sub(r"/\*.*?\*/", "", statement, flags=re.S)
+            without_comments = re.sub(r"(?m)^\s*--.*$", "", without_comments).strip()
+            if not without_comments:
+                continue
+
             upper = statement.upper()
             if upper.startswith("CREATE DATABASE") or upper.startswith("USE "):
                 continue
@@ -148,7 +153,6 @@ def _seed_users(database: str) -> None:
 def seed_campus(app) -> None:
     with app.app_context():
         from services.safety_service import ensure_campus_seed
-
         ensure_campus_seed()
 
 
@@ -163,7 +167,6 @@ def bootstrap_with_app(app=None) -> dict:
     }
     if not SCHEMA.exists():
         raise FileNotFoundError(f"Missing {SCHEMA}")
-
     print(
         f"Bootstrap: {Config.PGUSER}@{Config.PGHOST}:{Config.PGPORT}/{database} "
         f"(ssl={Config.PGSSL})"
@@ -180,7 +183,6 @@ def bootstrap_with_app(app=None) -> dict:
             print("Applying login_otp_challenges migration ...")
             apply_schema(database)
             status["schema_applied"] = True
-
     print("Seeding software.engineer / demo users / campus ...")
     _seed_users(database)
     status["seeded"] = True
@@ -196,7 +198,6 @@ def bootstrap_with_app(app=None) -> dict:
 def main() -> None:
     bootstrap_with_app(app=None)
     from app import app
-
     seed_campus(app)
     print("Campus seed complete.")
 
