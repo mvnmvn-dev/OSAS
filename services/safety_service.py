@@ -486,14 +486,19 @@ def _ensure_incident_schema():
             insp_info = query_all("PRAGMA table_info(safety_inspections)")
             insp_cols = {r["name"] for r in insp_info} if insp_info else set()
         else:
-            info = query_all("SHOW COLUMNS FROM incidents")
-            cols = {r["Field"] for r in info} if info else set()
-            team_info = query_all("SHOW COLUMNS FROM patrol_teams")
-            team_cols = {r["Field"] for r in team_info} if team_info else set()
-            drill_info = query_all("SHOW COLUMNS FROM drills")
-            drill_cols = {r["Field"] for r in drill_info} if drill_info else set()
-            insp_info = query_all("SHOW COLUMNS FROM safety_inspections")
-            insp_cols = {r["Field"] for r in insp_info} if insp_info else set()
+            # PostgreSQL/Neon does not support MySQL's SHOW COLUMNS syntax.
+            def _pg_columns(table_name):
+                rows = query_all(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'public' AND table_name = %s",
+                    (table_name,),
+                )
+                return {row["column_name"] for row in rows} if rows else set()
+
+            cols = _pg_columns("incidents")
+            team_cols = _pg_columns("patrol_teams")
+            drill_cols = _pg_columns("drills")
+            insp_cols = _pg_columns("safety_inspections")
 
         if "checkpoint_id" not in cols:
             try:
