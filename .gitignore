@@ -8,3 +8,5 @@ static/uploads/
 static/exports/
 *.sqlite3
 .DS_Store
+.neon
+node_modules/
