@@ -1,10 +1,13 @@
 import os
 from datetime import timedelta
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qsl, unquote, urlencode, urlparse, urlunparse
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# libpq in psycopg2-binary rejects Neon's channel_binding=require.
+_DSN_DROP_QUERY_KEYS = frozenset({"channel_binding"})
 
 
 def _parse_database_url(url):
@@ -19,9 +22,14 @@ def _parse_database_url(url):
         )
     if scheme not in ("postgres", "postgresql"):
         return {}
-    dsn = url
-    if dsn.startswith("postgres://"):
-        dsn = "postgresql://" + dsn[len("postgres://") :]
+    query = [
+        (key, value)
+        for key, value in parse_qsl(parsed.query, keep_blank_values=True)
+        if key.lower() not in _DSN_DROP_QUERY_KEYS
+    ]
+    if not any(key.lower() == "sslmode" for key, _ in query):
+        query.append(("sslmode", "require"))
+    dsn = urlunparse(parsed._replace(scheme="postgresql", query=urlencode(query)))
     return {
         "host": parsed.hostname or "localhost",
         "port": parsed.port or 5432,
