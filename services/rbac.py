@@ -22,6 +22,17 @@ ENDPOINT_PERMISSIONS = {
     'notification_read':'profile.manage_own', 'notifications_read_all':'profile.manage_own',
     'profile.index':'profile.manage_own', 'profile.update':'profile.manage_own', 'profile.upload_photo':'profile.manage_own', 'profile.remove_photo':'profile.manage_own',
     'users.index':'users.manage', 'users.create':'users.manage', 'users.update':'users.manage', 'users.reset_password':'users.manage',
+    'modules.contacts':'safety.view', 'modules.contact_save':'safety.manage', 'modules.contact_toggle':'safety.manage', 'modules.contact_delete':'safety.manage',
+    'modules.drills':'safety.view', 'modules.drill_save':'safety.manage', 'modules.drill_status':'safety.manage', 'modules.drill_delete':'safety.manage',
+    'modules.plans':'safety.view', 'modules.plan_save':'safety.manage', 'modules.plan_map':'safety.view', 'modules.plan_approve':'safety.manage',
+    'modules.plan_delete':'safety.manage', 'modules.inspections':'safety.view', 'modules.inspection_schedule':'safety.manage', 'modules.inspection_detail':'safety.view',
+    'modules.inspection_item_result':'safety.manage', 'modules.inspection_item_add':'safety.manage', 'modules.inspection_item_delete':'safety.manage',
+    'modules.inspection_action_toggle':'safety.manage', 'modules.inspection_complete':'safety.manage', 'modules.inspection_cancel':'safety.manage',
+    'modules.risks':'safety.view', 'modules.risk_save':'safety.manage', 'modules.risk_status':'safety.manage', 'modules.notifications':'safety.manage',
+    'modules.notification_send':'safety.manage', 'modules.notification_retry':'safety.manage', 'modules.notification_retry_all':'safety.manage',
+    'modules.roles':'safety.view', 'modules.role_save':'safety.manage', 'modules.role_assign':'safety.manage', 'modules.role_delete':'safety.manage',
+    'modules.first_aid':'safety.view', 'modules.first_aid_save':'safety.manage', 'modules.first_aid_adjust':'safety.manage', 'modules.first_aid_check':'safety.manage',
+    'modules.first_aid_delete':'safety.manage', 'modules.reports':'reports.view', 'modules.report_download':'reports.manage',
     'api.campus_map':'safety.view', 'api.readiness':'safety.view', 'api.search':'safety.view', 'api.patrol_scan':'patrol.manage', 'api.visitors':'visitor.view', 'api.checkpoint_risk_explanation':'safety.view',
 }
 NAV_SECTIONS = [
@@ -31,6 +42,13 @@ NAV_SECTIONS = [
     {'label':'Incident Response','items':[
         {'label':'Incidents','endpoint':'safety.incidents','icon':'fa-triangle-exclamation','permission':'safety.view'},
         {'label':'Emergency Plans','endpoint':'safety.emergency','icon':'fa-person-running','permission':'safety.view'},
+        {'label':'Parent Notifications','endpoint':'modules.notifications','icon':'fa-envelope-open-text','permission':'safety.manage'},
+    ]},
+    {'label':'Emergency Preparedness','items':[
+        {'label':'Emergency Contacts','endpoint':'modules.contacts','icon':'fa-address-book','permission':'safety.view'},
+        {'label':'Drill Scheduling','endpoint':'modules.drills','icon':'fa-calendar-days','permission':'safety.view'},
+        {'label':'Evacuation Plans','endpoint':'modules.plans','icon':'fa-map-location-dot','permission':'safety.view'},
+        {'label':'Emergency Roles','endpoint':'modules.roles','icon':'fa-user-tag','permission':'safety.view'},
     ]},
     {'label':'Patrol Operations','items':[
         {'label':'Patrol Planning','endpoint':'safety.patrol','icon':'fa-route','permission':'patrol.view'},
@@ -38,18 +56,22 @@ NAV_SECTIONS = [
     ]},
     {'label':'Safety & Compliance','items':[
         {'label':'Inspections','endpoint':'safety.inspections','icon':'fa-clipboard-check','permission':'safety.view'},
+        {'label':'Inspection Checklists','endpoint':'modules.inspections','icon':'fa-list-check','permission':'safety.view'},
+        {'label':'Risk Assessment','endpoint':'modules.risks','icon':'fa-triangle-exclamation','permission':'safety.view'},
+        {'label':'First Aid Supplies','endpoint':'modules.first_aid','icon':'fa-kit-medical','permission':'safety.view'},
         {'label':'Visitors & Gate','endpoint':'safety.visitors','icon':'fa-id-card','permission':'visitor.view'},
         {'label':'OSAS Operations','endpoint':'safety.osas','icon':'fa-shield-halved','permission':'safety.view'},
     ]},
     {'label':'Intelligence','items':[
         {'label':'Reports & Analytics','endpoint':'safety.reports','icon':'fa-chart-line','permission':'reports.view'},
+        {'label':'Compliance Reports','endpoint':'modules.reports','icon':'fa-file-shield','permission':'reports.view'},
         {'label':'Activity Log','endpoint':'safety.activity','icon':'fa-list-check','permission':'reports.view'},
     ]},
     {'label':'Administration','items':[
         {'label':'User Management','endpoint':'users.index','icon':'fa-users-gear','permission':'users.manage'},
     ]},
 ]
-STAFF_TOOL_ENDPOINTS = frozenset({'safety.index','safety.incidents','safety.inspections','safety.emergency','safety.patrol','safety.teams','safety.reports','safety.activity'})
+STAFF_TOOL_ENDPOINTS = frozenset({'safety.index','safety.incidents','safety.inspections','safety.emergency','safety.patrol','safety.teams','safety.reports','safety.activity','modules.contacts','modules.drills','modules.plans','modules.inspections','modules.risks','modules.roles','modules.first_aid','modules.notifications','modules.reports'})
 
 def has_permission(role, permission): return not permission or permission in ROLE_PERMISSIONS.get(role, set())
 def get_nav_for_role(role): return [{'label':s['label'],'nav_items':[i for i in s['items'] if has_permission(role,i['permission'])]} for s in NAV_SECTIONS if any(has_permission(role,i['permission']) for i in s['items'])]

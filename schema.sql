@@ -66,6 +66,8 @@ CREATE TABLE IF NOT EXISTS emergency_contacts (
   organization VARCHAR(150), role_title VARCHAR(100), phone VARCHAR(40) NOT NULL,
   email VARCHAR(120),
   contact_type VARCHAR(40) NOT NULL DEFAULT 'internal',
+  priority INT NOT NULL DEFAULT 100,
+  notes TEXT,
   active SMALLINT NOT NULL DEFAULT 1
 );
 
@@ -78,7 +80,9 @@ CREATE TABLE IF NOT EXISTS drills (
   checkpoint_id INT NULL REFERENCES checkpoints(id) ON DELETE SET NULL,
   inspection_id INT NULL,
   status VARCHAR(40) NOT NULL DEFAULT 'planned',
-  participant_count INT NOT NULL DEFAULT 0, notes TEXT
+  participant_count INT NOT NULL DEFAULT 0, notes TEXT,
+  completed_at TIMESTAMP NULL, duration_minutes INT NULL, evaluation_score INT NULL,
+  location VARCHAR(150) NULL
 );
 
 CREATE TABLE IF NOT EXISTS evacuation_plans (
@@ -89,7 +93,9 @@ CREATE TABLE IF NOT EXISTS evacuation_plans (
   primary_assembly_zone_id INT NULL REFERENCES campus_zones(id) ON DELETE SET NULL,
   version_no INT NOT NULL DEFAULT 1,
   active SMALLINT NOT NULL DEFAULT 1, created_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  notes TEXT, approved_at TIMESTAMP NULL, approved_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
+  map_original_name VARCHAR(255) NULL
 );
 
 CREATE TABLE IF NOT EXISTS patrol_teams (
@@ -138,14 +144,15 @@ CREATE TABLE IF NOT EXISTS safety_inspections (
   team_id INT NULL REFERENCES patrol_teams(id) ON DELETE SET NULL,
   scheduled_date DATE NOT NULL,
   completed_at TIMESTAMP NULL, overall_score DECIMAL(5,2),
-  status VARCHAR(20) NOT NULL DEFAULT 'scheduled', notes TEXT
+  status VARCHAR(20) NOT NULL DEFAULT 'scheduled', notes TEXT, summary TEXT
 );
 
 CREATE TABLE IF NOT EXISTS inspection_items (
   id SERIAL PRIMARY KEY, inspection_id INT NOT NULL REFERENCES safety_inspections(id) ON DELETE CASCADE,
   item_name VARCHAR(180) NOT NULL, category VARCHAR(100),
   result VARCHAR(20) NOT NULL DEFAULT 'pending',
-  finding TEXT, corrective_action TEXT
+  finding TEXT, corrective_action TEXT,
+  action_done SMALLINT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS risk_assessments (
@@ -161,7 +168,9 @@ CREATE TABLE IF NOT EXISTS emergency_roles (
   id SERIAL PRIMARY KEY, role_name VARCHAR(120) NOT NULL,
   responsibility TEXT NOT NULL, assigned_user_id INT NULL REFERENCES users(id) ON DELETE SET NULL,
   drill_id INT NULL REFERENCES drills(id) ON DELETE SET NULL,
-  active SMALLINT NOT NULL DEFAULT 1
+  active SMALLINT NOT NULL DEFAULT 1,
+  backup_user_id INT NULL REFERENCES users(id) ON DELETE SET NULL,
+  assigned_at TIMESTAMP NULL
 );
 
 CREATE TABLE IF NOT EXISTS first_aid_inventory (
@@ -169,7 +178,8 @@ CREATE TABLE IF NOT EXISTS first_aid_inventory (
   cabinet_location VARCHAR(150) NOT NULL, quantity INT NOT NULL DEFAULT 0,
   reorder_level INT NOT NULL DEFAULT 1, expiry_date DATE NULL, last_checked_at TIMESTAMP NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'available',
-  updated_by INT NULL REFERENCES users(id) ON DELETE SET NULL
+  updated_by INT NULL REFERENCES users(id) ON DELETE SET NULL,
+  last_restocked_at TIMESTAMP NULL
 );
 
 CREATE TABLE IF NOT EXISTS patrol_shifts (
@@ -215,7 +225,8 @@ CREATE TABLE IF NOT EXISTS parent_notifications (
   recipient_name VARCHAR(150) NOT NULL,
   recipient_phone VARCHAR(40), recipient_email VARCHAR(120), channel VARCHAR(20) NOT NULL,
   message TEXT NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'queued',
-  sent_at TIMESTAMP NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  sent_at TIMESTAMP NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  student_name VARCHAR(150) NULL, error_message TEXT NULL, attempts INT NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS notifications (

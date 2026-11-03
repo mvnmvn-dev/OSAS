@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from 'macros/pagination.html' import render_pagination %}
+{% from 'modules/_ui.html' import csrf, badge, modal, empty, select_options %}
+{% block title %}Inspection Checklists | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block page_actions %}
+{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="insp-modal"><i class="fas fa-plus"></i> Schedule Inspection</button>{% endif %}
+{% endblock %}
+{% block content %}
+<div class="panel-card">
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.inspections') }}">
+        <label>Status<select name="status"><option value="">All</option>{% for k in statuses %}<option value="{{ k }}" {% if k == status %}selected{% endif %}>{{ k.replace('_',' ').title() }}</option>{% endfor %}</select></label>
+        <button class="btn-secondary" type="submit"><i class="fas fa-filter"></i> Filter</button>
+    </form>
+    {% if inspections %}
+    <div class="mod-table-wrap"><table class="mod-table">
+        <thead><tr><th>Inspection</th><th>Scheduled</th><th>Status</th><th>Checklist</th><th>Score</th><th></th></tr></thead>
+        <tbody>
+        {% for i in inspections %}
+        <tr>
+            <td><strong>{{ i.inspection_code }}</strong><span class="sub">{{ i.type_label }} · {{ i.zone_name }}{% if i.team_name %} · {{ i.team_name }}{% endif %}</span></td>
+            <td>{{ i.scheduled_label }}</td>
+            <td>{{ badge(i.status_label, i.status_class) }}</td>
+            <td><div class="mod-progress"><span style="width:{{ i.progress }}%"></span></div>
+                <span class="sub">{{ i.item_pass }} pass · {{ i.item_fail }} fail · {{ i.item_pending }} pending{% if i.open_actions %} · {{ i.open_actions }} open action(s){% endif %}</span></td>
+            <td>{% if i.overall_score is not none %}{{ '%.0f'|format(i.overall_score|float) }}%{% else %}—{% endif %}</td>
+            <td><a class="btn-action" href="{{ url_for('modules.inspection_detail', inspection_id=i.id) }}">{{ 'View' if i.status in ('completed','cancelled') else 'Open checklist' }}</a></td>
+        </tr>
+        {% endfor %}
+        </tbody></table></div>
+    {{ render_pagination(pagination) }}
+    {% else %}{{ empty('fa-clipboard-check', 'No inspections', 'Schedule an inspection to generate its checklist.') }}{% endif %}
+</div>
+{% endblock %}
+{% block modals %}
+{% if has_perm('safety.manage') %}
+{% call modal('insp-modal', 'Inspections', 'Schedule an inspection', 'A checklist is generated from the selected type.') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.inspection_schedule') }}">{{ csrf() }}
+    <label>Campus zone<select name="zone_id" required><option value="">— Select —</option>{% for z in zones %}<option value="{{ z.id }}">{{ z.zone_name }}</option>{% endfor %}</select></label>
+    <label>Inspection type<select name="inspection_type">{% for t in types %}<option>{{ t }}</option>{% endfor %}</select></label>
+    <label>Scheduled date<input type="date" name="scheduled_date" required></label>
+    <label>Inspector<select name="inspector_id"><option value="">— Me —</option>{% for u in users %}<option value="{{ u.id }}">{{ u.full_name }}</option>{% endfor %}</select></label>
+    <label>Team<select name="team_id"><option value="">— None —</option>{% for t in teams %}<option value="{{ t.id }}">{{ t.team_name }}</option>{% endfor %}</select></label>
+    <label>Checkpoint<select name="checkpoint_id"><option value="">— None —</option>{% for c in checkpoints %}<option value="{{ c.id }}">{{ c.checkpoint_code }} · {{ c.checkpoint_name }}</option>{% endfor %}</select></label>
+    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Schedule</button></div>
+</form>
+{% endcall %}
+{% endif %}
+{% endblock %}

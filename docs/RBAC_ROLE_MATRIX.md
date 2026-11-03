@@ -15,6 +15,9 @@ OSAS uses least-privilege role permissions enforced by the application before-re
 | Visitor pass viewing | view | manage | manage | view | view |
 | Visitor registration and gate validation | manage | manage | manage | — | — |
 | Inspections, drills, and evacuation plans | manage | manage | — | manage | — |
+| Emergency contacts, roles, first aid, risks, checklists, plans, drills (view) | view | view | view | view | view |
+| Same modules (create/edit/delete) | manage | manage | — | manage | — |
+| Parent notifications (view + send; contains personal data) | manage | manage | — | manage | — |
 | Reports and exports | view/export | view | — | view/export | — |
 | User management and role assignment | manage | — | — | — | — |
 | Activity/audit views | view | — | — | — | — |

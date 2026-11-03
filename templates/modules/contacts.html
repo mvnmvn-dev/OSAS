@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from 'macros/pagination.html' import render_pagination %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, select_options, delete_form %}
+{% block title %}Emergency Contacts | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block page_actions %}
+{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="contact-modal"><i class="fas fa-plus"></i> Add Contact</button>{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if summary.missing_critical %}
+<div class="mod-alert danger"><i class="fas fa-triangle-exclamation"></i>
+    <div><strong>Missing emergency numbers:</strong> no active {{ summary.missing_critical|join(', ') }} contact is on file. Add them so staff can reach responders quickly.</div></div>
+{% endif %}
+<div class="mod-kpis">
+    {{ kpi('Active contacts', summary.total) }}
+    {% for key, label in types %}{% if summary.by_type.get(key) %}{{ kpi(label, summary.by_type[key]) }}{% endif %}{% endfor %}
+</div>
+
+<div class="panel-card">
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.contacts') }}">
+        <label>Search<input type="search" name="q" value="{{ q }}" placeholder="Name, organization, phone…"></label>
+        <label>Type<select name="type"><option value="">All types</option>{{ select_options(types, ctype) }}</select></label>
+        <label style="display:flex;gap:.4rem;align-items:center;"><input type="checkbox" name="inactive" value="1" {% if show_all %}checked{% endif %} style="min-width:0;margin:0;"> Show inactive</label>
+        <button class="btn-secondary" type="submit"><i class="fas fa-magnifying-glass"></i> Filter</button>
+    </form>
+
+    {% if contacts %}
+    <div class="mod-table-wrap">
+    <table class="mod-table">
+        <thead><tr><th>Contact</th><th>Type</th><th>Phone</th><th>Email</th><th class="num">Priority</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for c in contacts %}
+        <tr {% if not c.active %}style="opacity:.55"{% endif %}>
+            <td><strong>{{ c.contact_name }}</strong>
+                <span class="sub">{{ c.organization or '' }}{% if c.organization and c.role_title %} · {% endif %}{{ c.role_title or '' }}</span>
+                {% if c.notes %}<span class="sub">{{ c.notes }}</span>{% endif %}</td>
+            <td>{{ badge(c.type_label, 'info') }}{% if not c.active %} {{ badge('Inactive', 'warning') }}{% endif %}</td>
+            <td><a href="tel:{{ c.tel }}">{{ c.phone }}</a></td>
+            <td>{% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% else %}<span class="mod-muted">—</span>{% endif %}</td>
+            <td class="num">{{ c.priority }}</td>
+            <td>
+                {% if has_perm('safety.manage') %}
+                <div class="mod-actions">
+                    <details class="mod-edit"><summary class="btn-action"><i class="fas fa-pen"></i> Edit</summary>
+                        <div class="mod-edit-body">
+                        <form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
+                            <label>Name<input name="contact_name" value="{{ c.contact_name }}" required maxlength="150"></label>
+                            <label>Phone<input name="phone" value="{{ c.phone }}" required maxlength="40"></label>
+                            <label>Email<input type="email" name="email" value="{{ c.email or '' }}" maxlength="120"></label>
+                            <label>Organization<input name="organization" value="{{ c.organization or '' }}" maxlength="150"></label>
+                            <label>Role / title<input name="role_title" value="{{ c.role_title or '' }}" maxlength="100"></label>
+                            <label>Type<select name="contact_type">{{ select_options(types, c.contact_type) }}</select></label>
+                            <label>Priority (1 = first)<input type="number" name="priority" min="1" max="999" value="{{ c.priority }}"></label>
+                            <label class="span-all">Notes<textarea name="notes" rows="2" maxlength="1000">{{ c.notes or '' }}</textarea></label>
+                            <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save changes</button></div>
+                        </form></div>
+                    </details>
+                    <form method="POST" action="{{ url_for('modules.contact_toggle', contact_id=c.id) }}">{{ csrf() }}<input type="hidden" name="active" value="{{ 0 if c.active else 1 }}">
+                        <button class="btn-action" type="submit">{{ 'Deactivate' if c.active else 'Activate' }}</button></form>
+                    {{ delete_form(url_for('modules.contact_delete', contact_id=c.id), 'Delete this contact permanently?') }}
+                </div>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {{ render_pagination(pagination) }}
+    {% else %}
+    {{ empty('fa-address-book', 'No contacts found', 'Add the numbers staff need during an emergency: security desk, clinic, fire station, police and utilities.') }}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+{% if has_perm('safety.manage') %}
+{% call modal('contact-modal', 'Emergency Contacts', 'Add emergency contact', 'Fire, police, medical and campus numbers used during incidents.') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}">{{ csrf() }}
+    <label>Name<input name="contact_name" required maxlength="150" placeholder="e.g. Quezon City Fire Station"></label>
+    <label>Phone<input name="phone" required maxlength="40" placeholder="e.g. 0917 123 4567"></label>
+    <label>Email<input type="email" name="email" maxlength="120"></label>
+    <label>Organization<input name="organization" maxlength="150"></label>
+    <label>Role / title<input name="role_title" maxlength="100"></label>
+    <label>Type<select name="contact_type">{{ select_options(types, 'internal') }}</select></label>
+    <label>Priority (1 = shown first)<input type="number" name="priority" min="1" max="999" value="100"></label>
+    <label class="span-all">Notes<textarea name="notes" rows="2" maxlength="1000" placeholder="Hours, extension, what to say…"></textarea></label>
+    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save contact</button></div>
+</form>
+{% endcall %}
+{% endif %}
+{% endblock %}

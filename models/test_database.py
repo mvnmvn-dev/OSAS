@@ -107,7 +107,8 @@ CREATE TABLE IF NOT EXISTS safety_inspections (
     completed_at TEXT,
     overall_score REAL,
     status TEXT NOT NULL DEFAULT 'scheduled',
-    notes TEXT
+    notes TEXT,
+    summary TEXT
 );
 CREATE TABLE IF NOT EXISTS drills (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,7 +121,11 @@ CREATE TABLE IF NOT EXISTS drills (
     inspection_id INTEGER,
     status TEXT NOT NULL DEFAULT 'planned',
     participant_count INTEGER NOT NULL DEFAULT 0,
-    notes TEXT
+    notes TEXT,
+    completed_at TEXT,
+    duration_minutes INTEGER,
+    evaluation_score INTEGER,
+    location TEXT
 );
 CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -148,5 +153,106 @@ CREATE TABLE IF NOT EXISTS visitors (
     registered_by INTEGER,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (registered_by) REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE TABLE IF NOT EXISTS inspection_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_id INTEGER NOT NULL,
+    item_name TEXT NOT NULL,
+    category TEXT,
+    result TEXT NOT NULL DEFAULT 'pending',
+    finding TEXT,
+    corrective_action TEXT,
+    action_done INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY (inspection_id) REFERENCES safety_inspections(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS emergency_contacts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    contact_name TEXT NOT NULL,
+    organization TEXT,
+    role_title TEXT,
+    phone TEXT NOT NULL,
+    email TEXT,
+    contact_type TEXT NOT NULL DEFAULT 'internal',
+    priority INTEGER NOT NULL DEFAULT 100,
+    notes TEXT,
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS evacuation_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    building_id INTEGER NOT NULL,
+    floor_label TEXT NOT NULL,
+    plan_name TEXT NOT NULL,
+    map_file_path TEXT,
+    primary_assembly_zone_id INTEGER,
+    version_no INTEGER NOT NULL DEFAULT 1,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_by INTEGER,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,
+    approved_at TEXT,
+    approved_by INTEGER,
+    map_original_name TEXT
+);
+CREATE TABLE IF NOT EXISTS risk_assessments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    zone_id INTEGER NOT NULL,
+    assessed_by INTEGER,
+    hazard_title TEXT NOT NULL,
+    hazard_description TEXT,
+    likelihood INTEGER NOT NULL,
+    severity INTEGER NOT NULL,
+    risk_score REAL NOT NULL,
+    mitigation_plan TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    reviewed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS emergency_roles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    role_name TEXT NOT NULL,
+    responsibility TEXT NOT NULL,
+    assigned_user_id INTEGER,
+    drill_id INTEGER,
+    active INTEGER NOT NULL DEFAULT 1,
+    backup_user_id INTEGER,
+    assigned_at TEXT
+);
+CREATE TABLE IF NOT EXISTS first_aid_inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    item_name TEXT NOT NULL,
+    cabinet_location TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 0,
+    reorder_level INTEGER NOT NULL DEFAULT 1,
+    expiry_date TEXT,
+    last_checked_at TEXT,
+    status TEXT NOT NULL DEFAULT 'available',
+    updated_by INTEGER,
+    last_restocked_at TEXT
+);
+CREATE TABLE IF NOT EXISTS parent_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id INTEGER,
+    recipient_name TEXT NOT NULL,
+    recipient_phone TEXT,
+    recipient_email TEXT,
+    channel TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    sent_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    student_name TEXT,
+    error_message TEXT,
+    attempts INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS patrol_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    route_id INTEGER,
+    checkpoint_id INTEGER NOT NULL,
+    team_id INTEGER,
+    guard_id INTEGER,
+    scanned_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    scan_method TEXT NOT NULL DEFAULT 'manual',
+    result TEXT NOT NULL DEFAULT 'valid',
+    notes TEXT
 );
 """

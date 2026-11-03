@@ -40,6 +40,9 @@ STATUS_UI = {
 }
 
 
+INCIDENT_TYPES = {"security", "safety_hazard", "medical", "fire", "earthquake", "lockdown", "other"}
+
+
 PRIORITY_UI = {
     "critical": ("Critical", "critical"),
     "high": ("High", "high"),
@@ -898,7 +901,7 @@ def _operational_metrics():
             (SELECT AVG((julianday(COALESCE(resolved_at,CURRENT_TIMESTAMP))-julianday(reported_at))*1440.0) FROM incidents WHERE reported_at >= datetime('now','-30 days')) AS avg_response,
             (SELECT COUNT(*) FROM patrol_teams WHERE active=1) AS team_total,
             (SELECT COUNT(*) FROM patrol_teams t WHERE active=1 AND EXISTS (SELECT 1 FROM patrol_shifts s WHERE s.team_id=t.id AND s.status='active')) AS team_on_duty,
-            ((SELECT COUNT(*) FROM first_aid_inventory WHERE status IN ('low_stock','expired')) + (SELECT COUNT(*) FROM risk_assessments WHERE status IN ('open','mitigating'))) AS actions_total,
+            ((SELECT COUNT(*) FROM first_aid_inventory WHERE status IN ('low_stock','expired','out_of_stock')) + (SELECT COUNT(*) FROM risk_assessments WHERE status IN ('open','mitigating'))) AS actions_total,
             (SELECT COUNT(*) FROM (SELECT id FROM audit_logs ORDER BY created_at DESC LIMIT 50) recent) AS activity_total""") or {}
     else:
         row = query_one("""SELECT
@@ -921,7 +924,7 @@ def _operational_metrics():
             (SELECT AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at,NOW())-reported_at))/60.0) FROM incidents WHERE reported_at >= NOW() - INTERVAL '30 days') AS avg_response,
             (SELECT COUNT(*) FROM patrol_teams WHERE active=1) AS team_total,
             (SELECT COUNT(*) FROM patrol_teams t WHERE active=1 AND EXISTS (SELECT 1 FROM patrol_shifts s WHERE s.team_id=t.id AND s.status='active')) AS team_on_duty,
-            ((SELECT COUNT(*) FROM first_aid_inventory WHERE status IN ('low_stock','expired')) + (SELECT COUNT(*) FROM risk_assessments WHERE status IN ('open','mitigating'))) AS actions_total,
+            ((SELECT COUNT(*) FROM first_aid_inventory WHERE status IN ('low_stock','expired','out_of_stock')) + (SELECT COUNT(*) FROM risk_assessments WHERE status IN ('open','mitigating'))) AS actions_total,
             (SELECT COUNT(*) FROM (SELECT id FROM audit_logs ORDER BY created_at DESC LIMIT 50) recent) AS activity_total""") or {}
 
     planned = int(row.get("route_total") or 0)
@@ -1247,7 +1250,7 @@ def get_safety_dashboard(section="overview", status_filter=None):
 
     actions = []
     for item in (query_all(
-        "SELECT * FROM first_aid_inventory WHERE status IN ('low_stock','expired') ORDER BY quantity ASC LIMIT 20"
+        "SELECT * FROM first_aid_inventory WHERE status IN ('low_stock','expired','out_of_stock') ORDER BY quantity ASC LIMIT 20"
     ) if load_actions else []):
         actions.append({
             "title": f"Restock {item['item_name']}",
@@ -1762,6 +1765,15 @@ def log_incident(
     team_id=None,
 ):
     ensure_campus_seed()
+    title = (title or "").strip()
+    if not title:
+        raise ValueError("Incident title is required.")
+    priority = (priority or "medium").strip().lower()
+    if priority not in PRIORITY_UI:
+        raise ValueError("Priority must be low, medium, high or critical.")
+    incident_type = (incident_type or "other").strip().lower()
+    if incident_type not in INCIDENT_TYPES:
+        raise ValueError("Unknown incident type.")
 
     # Resolve checkpoint if provided or by location match
     cp = None
@@ -1969,7 +1981,7 @@ def create_inspection(zone, insp_type, date_label, actor="OSAS Administrator", u
         if cp_zone and cp_zone.get("zone_id"):
             z = {"id": cp_zone["zone_id"]}
     if not z:
-        z = query_one("SELECT id FROM campus_zones ORDER BY id LIMIT 1")
+        return None  # unknown zone: never silently file the inspection under a different zone
 
     resolved_team_id = None
     if team_id:
@@ -1987,6 +1999,8 @@ def create_inspection(zone, insp_type, date_label, actor="OSAS Administrator", u
            VALUES (%s,%s,%s,%s,%s,%s,'scheduled',%s)""",
         (code, z["id"] if z else 1, resolved_cp_id, resolved_team_id, user_id, date_label or datetime.now().date().isoformat(), insp_type),
     )
+    from services import osas_modules_service as _mods
+    _mods.create_inspection_items(iid, insp_type)
     write_audit("Inspection created", "inspection", iid, new_values={
         "code": code, "zone": zone, "checkpoint_id": resolved_cp_id, "team_id": resolved_team_id
     })
@@ -2038,21 +2052,19 @@ def create_drill(title, drill_type, scheduled_at, actor="OSAS Administrator", us
     })
 
 
-def create_plan(building, floor, assembly_zone, actor="OSAS Administrator", user_id=None):
-    b = query_one("SELECT id FROM buildings WHERE building_name LIKE %s OR building_code LIKE %s LIMIT 1", (f"%{building}%", f"%{building}%"))
-    if not b:
-        bid, _ = execute(
-            "INSERT INTO buildings (building_code, building_name, floors) VALUES (%s,%s,1)",
-            (building[:8].upper().replace(" ", ""), building),
-        )
-        b = {"id": bid}
-    az = query_one("SELECT id FROM campus_zones WHERE zone_name LIKE %s LIMIT 1", (f"%{assembly_zone}%",))
-    pid, _ = execute(
-        """INSERT INTO evacuation_plans (building_id, floor_label, plan_name, primary_assembly_zone_id, version_no, created_by)
-           VALUES (%s,%s,%s,%s,1,%s)""",
-        (b["id"], floor, f"{building} Evacuation", az["id"] if az else None, user_id),
+def create_plan(building, floor, assembly_zone, actor="OSAS Administrator", user_id=None, map_file=None):
+    """Legacy entry point: creates an immediately-current plan version (see osas_modules_service)."""
+    from services import osas_modules_service as mods
+
+    bld = query_one("SELECT id FROM buildings WHERE building_name LIKE %s OR building_code LIKE %s LIMIT 1", (f"%{building}%", f"%{building}%"))
+    zone = query_one("SELECT id FROM campus_zones WHERE zone_name LIKE %s LIMIT 1", (f"%{assembly_zone}%",))
+    if not zone:
+        raise mods.ModuleError("Assembly zone not found.")
+    return mods.create_plan_version(
+        {"building_id": bld["id"] if bld else None, "new_building": None if bld else building,
+         "floor_label": floor, "assembly_zone_id": zone["id"]},
+        map_file, user_id=user_id, approve=True,
     )
-    write_audit("Evacuation plan added", "evacuation_plan", pid, new_values={"building": building})
 
 
 def generate_route(patrol_date, team_name, start_code, duration, actor="OSAS Administrator", user_id=None):
@@ -2287,152 +2299,30 @@ def add_incident_attachment(incident_code, storage, filename, user_id=None):
 
 
 def queue_parent_notification(incident_code, recipient_name, channel, message, phone=None, email=None):
-    row = query_one("SELECT id FROM incidents WHERE incident_code=%s", (incident_code,))
-    channel = (channel or "email").lower()
-    if channel not in ("sms", "email", "push"):
-        channel = "email"
-    nid, _ = execute(
-        """INSERT INTO parent_notifications
-           (incident_id, recipient_name, recipient_phone, recipient_email, channel, message, status)
-           VALUES (%s,%s,%s,%s,%s,%s,'queued')""",
-        (row["id"] if row else None, recipient_name, phone, email, channel, message),
+    """Queue and attempt delivery. Returns ``(notification_id, sent)``; see osas_modules_service."""
+    from services import osas_modules_service as mods
+
+    nid, status = mods.send_parent_notification(
+        {"incident_code": incident_code, "recipient_name": recipient_name, "channel": channel,
+         "message": message, "phone": phone, "email": email},
+        user_id=None,
     )
-    # Attempt delivery — mark sent when provider configured, else remain queued
-    sent = False
-    if channel == "email" and current_app.config.get("SMTP_HOST"):
-        sent = _send_email(email, f"OSAS alert · {incident_code}", message)
-    elif channel == "sms" and current_app.config.get("SMS_PROVIDER_URL"):
-        sent = _send_sms(phone, message)
-    if sent:
-        execute("UPDATE parent_notifications SET status='sent', sent_at=NOW() WHERE id=%s", (nid,))
-    write_audit("Parent notification queued", "parent_notification", nid, new_values={"channel": channel, "sent": sent})
-    return nid, sent
-
-
-def _send_email(to_addr, subject, body):
-    if not to_addr:
-        return False
-    try:
-        import smtplib
-        from email.message import EmailMessage
-        msg = EmailMessage()
-        msg["Subject"] = subject
-        msg["From"] = current_app.config.get("SMTP_FROM")
-        msg["To"] = to_addr
-        msg.set_content(body)
-        with smtplib.SMTP(current_app.config["SMTP_HOST"], current_app.config["SMTP_PORT"], timeout=10) as smtp:
-            smtp.starttls()
-            if current_app.config.get("SMTP_USER"):
-                smtp.login(current_app.config["SMTP_USER"], current_app.config["SMTP_PASSWORD"])
-            smtp.send_message(msg)
-        return True
-    except Exception:
-        return False
-
-
-def _send_sms(phone, message):
-    if not phone:
-        return False
-    try:
-        import requests
-        resp = requests.post(
-            current_app.config["SMS_PROVIDER_URL"],
-            json={"to": phone, "message": message},
-            headers={"Authorization": f"Bearer {current_app.config.get('SMS_API_KEY', '')}"},
-            timeout=8,
-        )
-        return resp.status_code < 300
-    except Exception:
-        return False
+    return nid, status == "sent"
 
 
 def export_report(report_type, date_range, fmt, actor="OSAS Administrator", user_id=None):
-    ensure_campus_seed()
+    """Legacy entry point: writes the export to EXPORT_FOLDER and returns its relative path."""
+    from services import compliance_reports
+
+    content, _mime, filename = compliance_reports.export_report_bytes(
+        report_type, fmt, preset=date_range, user_id=user_id
+    )
     export_root = current_app.config.get("EXPORT_FOLDER", "static/exports")
     os.makedirs(export_root, exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_type = (report_type or "report").lower().replace(" ", "_")
-    fmt = (fmt or "CSV").upper()
-
-    rows = []
-    headers = []
-    if "incident" in safe_type:
-        headers = ["Code", "Title", "Status", "Priority", "Reported", "Checkpoint", "Assigned Team"]
-        for r in query_all(
-            """
-            SELECT i.incident_code, i.title, i.status, i.priority, i.reported_at,
-                   COALESCE(c.checkpoint_name, 'None') AS checkpoint_name,
-                   COALESCE(pt.team_name, u.full_name, 'Unassigned') AS team_name
-            FROM incidents i
-            LEFT JOIN checkpoints c ON c.id = i.checkpoint_id
-            LEFT JOIN patrol_teams pt ON pt.id = i.team_id
-            LEFT JOIN users u ON u.id = i.assigned_to
-            ORDER BY i.reported_at DESC
-            """
-        ):
-            rows.append([r["incident_code"], r["title"], r["status"], r["priority"], str(r["reported_at"]), r["checkpoint_name"], r["team_name"]])
-    elif "patrol" in safe_type:
-        headers = ["Route", "Engine", "Distance_m", "Duration_s", "Status"]
-        for r in query_all("SELECT route_name, routing_engine, distance_meters, duration_seconds, status FROM patrol_routes ORDER BY created_at DESC"):
-            rows.append([r["route_name"], r["routing_engine"], r["distance_meters"], r["duration_seconds"], r["status"]])
-    elif "inspection" in safe_type:
-        headers = ["Code", "Zone", "Date", "Status"]
-        for r in query_all(
-            """SELECT si.inspection_code, z.zone_name, si.scheduled_date, si.status
-               FROM safety_inspections si JOIN campus_zones z ON z.id = si.zone_id ORDER BY si.scheduled_date DESC"""
-        ):
-            rows.append([r["inspection_code"], r["zone_name"], str(r["scheduled_date"]), r["status"]])
-    else:
-        headers = ["When", "Action", "Entity", "User"]
-        for r in query_all(
-            """SELECT al.created_at, al.action, al.entity_type, u.full_name
-               FROM audit_logs al LEFT JOIN users u ON u.id = al.user_id
-               ORDER BY al.created_at DESC LIMIT 200"""
-        ):
-            rows.append([str(r["created_at"]), r["action"], r.get("entity_type") or "", r.get("full_name") or ""])
-
-    if fmt == "EXCEL":
-        path = os.path.join(export_root, f"{safe_type}_{stamp}.xlsx")
-        from openpyxl import Workbook
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Report"
-        ws.append(headers)
-        for row in rows:
-            ws.append(row)
-        wb.save(path)
-    elif fmt == "PDF":
-        path = os.path.join(export_root, f"{safe_type}_{stamp}.pdf")
-        from reportlab.lib.pagesizes import letter
-        from reportlab.pdfgen import canvas
-        c = canvas.Canvas(path, pagesize=letter)
-        width, height = letter
-        y = height - 50
-        c.setFont("Helvetica-Bold", 14)
-        c.drawString(40, y, f"OSAS {report_type} ({date_range})")
-        y -= 30
-        c.setFont("Helvetica", 9)
-        c.drawString(40, y, " | ".join(headers))
-        y -= 16
-        for row in rows[:60]:
-            c.drawString(40, y, " | ".join(str(x)[:24] for x in row))
-            y -= 12
-            if y < 40:
-                c.showPage()
-                y = height - 40
-                c.setFont("Helvetica", 9)
-        c.save()
-    else:
-        path = os.path.join(export_root, f"{safe_type}_{stamp}.csv")
-        import csv
-        with open(path, "w", newline="", encoding="utf-8") as fh:
-            writer = csv.writer(fh)
-            writer.writerow(headers)
-            writer.writerows(rows)
-
-    rel = path.replace("\\", "/")
-    write_audit("Report exported", "report", None, new_values={"type": report_type, "format": fmt, "path": rel})
-    return rel
+    path = os.path.join(export_root, filename)
+    with open(path, "wb") as fh:
+        fh.write(content)
+    return path.replace("\\", "/")
 
 
 def reset_store():

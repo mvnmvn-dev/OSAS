@@ -220,17 +220,20 @@ def log_incident():
     if not title:
         flash('Incident title is required.', 'error')
     else:
-        code = safety_svc.log_incident(
-            title=title,
-            location=location,
-            priority=priority,
-            actor=_actor(),
-            user_id=_uid(),
-            incident_type=incident_type,
-            checkpoint_id=checkpoint_id,
-            team_id=team_id,
-        )
-        flash(f'Incident {code} queued for response.', 'success')
+        try:
+            code = safety_svc.log_incident(
+                title=title,
+                location=location,
+                priority=priority,
+                actor=_actor(),
+                user_id=_uid(),
+                incident_type=incident_type,
+                checkpoint_id=checkpoint_id,
+                team_id=team_id,
+            )
+            flash(f'Incident {code} queued for response.', 'success')
+        except ValueError as exc:
+            flash(str(exc), 'error')
     return redirect(url_for('safety.incidents'))
 
 
@@ -308,8 +311,11 @@ def notify_parent():
     if not code or not name or not message:
         flash('Recipient, incident, and message are required.', 'error')
     else:
-        _, sent = safety_svc.queue_parent_notification(code, name, channel, message, phone, email)
-        flash('Notification sent.' if sent else 'Notification queued (delivery provider not configured).', 'success')
+        try:
+            _, sent = safety_svc.queue_parent_notification(code, name, channel, message, phone, email)
+            flash('Notification sent.' if sent else 'Notification saved but not delivered. Review it under Parent Notifications.', 'success' if sent else 'error')
+        except Exception as exc:
+            flash(str(exc), 'error')
     return redirect(url_for('safety.incidents'))
 
 
@@ -323,7 +329,10 @@ def create_inspection():
     checkpoint_id = request.form.get('checkpoint_id') or None
     team_id = request.form.get('team_id') or None
     code = safety_svc.create_inspection(zone, insp_type, date_val, _actor(), _uid(), team_id=team_id, checkpoint_id=checkpoint_id)
-    flash(f'Inspection {code} created and added to the OSAS review queue.', 'success')
+    if code:
+        flash(f'Inspection {code} created and added to the OSAS review queue.', 'success')
+    else:
+        flash('Campus zone not found. Use a zone or checkpoint name from the list.', 'error')
     ref = request.referrer or ''
     if 'emergency' in ref:
         return redirect(url_for('safety.emergency'))
@@ -361,8 +370,11 @@ def create_plan():
     if not building or not floor or not assembly:
         flash('Building, floor, and assembly zone are required.', 'error')
     else:
-        safety_svc.create_plan(building, floor, assembly, _actor(), _uid())
-        flash(f'Evacuation plan for {building} added.', 'success')
+        try:
+            safety_svc.create_plan(building, floor, assembly, _actor(), _uid())
+            flash(f'Evacuation plan for {building} added.', 'success')
+        except Exception as exc:
+            flash(str(exc), 'error')
     return redirect(url_for('safety.emergency'))
 
 
@@ -436,7 +448,11 @@ def export_report():
     report_type = request.form.get('report_type') or 'Incident summary'
     date_range = request.form.get('range') or 'Last 7 days'
     fmt = request.form.get('format') or 'PDF'
-    path = safety_svc.export_report(report_type, date_range, fmt, _actor(), _uid())
+    try:
+        path = safety_svc.export_report(report_type, date_range, fmt, _actor(), _uid())
+    except Exception as exc:
+        flash(str(exc), 'error')
+        return redirect(url_for('safety.reports'))
     flash(f'{report_type} export ready ({fmt}).', 'success')
     abs_path = path if os.path.isabs(path) else os.path.join(current_app.root_path, path)
     if os.path.isfile(abs_path):

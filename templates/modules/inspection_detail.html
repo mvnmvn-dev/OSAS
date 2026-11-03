@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% from 'modules/_ui.html' import csrf, badge, kpi %}
+{% block title %}{{ inspection.inspection_code }} | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block page_actions %}<a class="btn-secondary" href="{{ url_for('modules.inspections') }}"><i class="fas fa-arrow-left"></i> All inspections</a>{% endblock %}
+{% block content %}
+{% set i = inspection %}
+<div class="mod-kpis">
+    {{ kpi('Status', i.status_label) }}
+    {{ kpi('Scheduled', i.scheduled_label) }}
+    {{ kpi('Passed', i.item_pass, 'good') }}
+    {{ kpi('Failed', i.item_fail, 'alert' if i.item_fail else '') }}
+    {{ kpi('Pending', i.item_pending) }}
+    {{ kpi('Score', ('%.0f'|format(i.overall_score|float) ~ '%') if i.overall_score is not none else '—') }}
+</div>
+{% if i.summary %}<div class="mod-alert" style="background:#f8fafc;border-color:#e2e8f0;color:#334155;"><i class="fas fa-note-sticky"></i><div>{{ i.summary }}</div></div>{% endif %}
+<div class="mod-two-col">
+<div>
+    {% for category, items in i.groups.items() %}
+    <div class="checklist-group"><h3>{{ category }}</h3>
+    {% for it in items %}
+    <div class="check-item {{ it.result }}">
+        <div class="check-item-head"><span>{{ it.item_name }}</span>{{ badge(it.result|upper if it.result != 'na' else 'N/A', {'pass':'success','fail':'danger','pending':'warning','na':'info'}[it.result]) }}</div>
+        {% if i.editable and has_perm('safety.manage') %}
+        <form method="POST" action="{{ url_for('modules.inspection_item_result', inspection_id=i.id, item_id=it.id) }}">{{ csrf() }}
+            <div class="check-choices">
+                {% for val, lab in [('pass','Pass'),('fail','Fail'),('na','N/A')] %}<label><input type="radio" name="result" value="{{ val }}" {% if it.result == val %}checked{% endif %} required> {{ lab }}</label>{% endfor %}
+            </div>
+            <div class="mod-form">
+                <label>Finding (required when failed)<input name="finding" maxlength="1000" value="{{ it.finding or '' }}"></label>
+                <label>Corrective action<input name="corrective_action" maxlength="1000" value="{{ it.corrective_action or '' }}"></label>
+                <div class="mod-form-actions"><button class="btn-action primary" type="submit">Save result</button></div>
+            </div>
+        </form>
+        <form method="POST" action="{{ url_for('modules.inspection_item_delete', inspection_id=i.id, item_id=it.id) }}" onsubmit="return confirm('Remove this item?');" style="margin-top:.3rem">{{ csrf() }}<button class="btn-action danger" type="submit">Remove item</button></form>
+        {% else %}
+            {% if it.finding %}<p class="sub mod-muted" style="margin:.4rem 0 0">Finding: {{ it.finding }}</p>{% endif %}
+            {% if it.corrective_action %}<p class="sub mod-muted" style="margin:.2rem 0 0">Action: {{ it.corrective_action }}</p>{% endif %}
+        {% endif %}
+        {% if it.result == 'fail' and has_perm('safety.manage') %}
+        <form method="POST" action="{{ url_for('modules.inspection_action_toggle', inspection_id=i.id, item_id=it.id) }}" style="margin-top:.4rem">{{ csrf() }}
+            <input type="hidden" name="done" value="{{ 0 if it.action_done else 1 }}">
+            <button class="btn-action" type="submit">{{ 'Reopen corrective action' if it.action_done else 'Mark corrective action done' }}</button>
+            {% if it.action_done %}{{ badge('Action closed', 'success') }}{% else %}{{ badge('Action open', 'danger') }}{% endif %}
+        </form>
+        {% endif %}
+    </div>
+    {% endfor %}</div>
+    {% endfor %}
+</div>
+<div>
+    {% if i.editable and has_perm('safety.manage') %}
+    <div class="panel-card" style="margin-bottom:1rem">
+        <h3 class="section-title">Add checklist item</h3>
+        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_item_add', inspection_id=i.id) }}">{{ csrf() }}
+            <label class="span-all">Item<input name="item_name" required maxlength="180"></label>
+            <label class="span-all">Category<input name="category" maxlength="100" placeholder="Custom"></label>
+            <div class="mod-form-actions"><button class="btn-action" type="submit">Add</button></div>
+        </form>
+    </div>
+    <div class="panel-card" style="margin-bottom:1rem">
+        <h3 class="section-title">Complete inspection</h3>
+        <p class="mod-muted" style="font-size:.72rem">All items need a result. Failed items automatically open a risk assessment.</p>
+        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_complete', inspection_id=i.id) }}">{{ csrf() }}
+            <label class="span-all">Summary<textarea name="summary" rows="3" maxlength="2000"></textarea></label>
+            <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Complete inspection</button></div>
+        </form>
+    </div>
+    <div class="panel-card">
+        <h3 class="section-title">Cancel inspection</h3>
+        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_cancel', inspection_id=i.id) }}" onsubmit="return confirm('Cancel this inspection?');">{{ csrf() }}
+            <label class="span-all">Reason<input name="reason" required maxlength="500"></label>
+            <div class="mod-form-actions"><button class="btn-action danger" type="submit">Cancel inspection</button></div>
+        </form>
+    </div>
+    {% else %}
+    <div class="panel-card"><p class="mod-muted">Inspector: {{ i.inspector_name or '—' }}<br>Zone: {{ i.zone_name }}<br>{% if i.completed_at %}Completed: {{ i.completed_at }}{% endif %}</p></div>
+    {% endif %}
+</div>
+</div>
+{% endblock %}

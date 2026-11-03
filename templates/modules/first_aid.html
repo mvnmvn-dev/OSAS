@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% from 'macros/pagination.html' import render_pagination %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, delete_form %}
+{% block title %}First Aid Supplies | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block page_actions %}{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="aid-modal"><i class="fas fa-plus"></i> Add Item</button>{% endif %}{% endblock %}
+{% macro item_fields(i=None) %}
+    <label>Item<input name="item_name" required maxlength="150" value="{{ i.item_name if i else '' }}"></label>
+    <label>Cabinet location<input name="cabinet_location" required maxlength="150" value="{{ i.cabinet_location if i else '' }}" list="aid-locations"></label>
+    <label>Quantity<input type="number" name="quantity" min="0" required value="{{ i.quantity if i else 0 }}"></label>
+    <label>Reorder level<input type="number" name="reorder_level" min="0" value="{{ i.reorder_level if i else 1 }}"></label>
+    <label>Expiry date<input type="date" name="expiry_date" value="{{ i.expiry_date|string|truncate(10, True, '') if i and i.expiry_date else '' }}"></label>
+{% endmacro %}
+{% block content %}
+<datalist id="aid-locations">{% for l in locations %}<option value="{{ l }}">{% endfor %}</datalist>
+{% if summary.needs_action %}<div class="mod-alert danger"><i class="fas fa-kit-medical"></i><div><strong>{{ summary.needs_action }} item(s) need attention</strong> — low, out of stock or expired.</div></div>{% endif %}
+<div class="mod-kpis">
+    {{ kpi('Items', summary.total) }}{{ kpi('In stock', summary.counts.available, 'good') }}
+    {{ kpi('Low stock', summary.counts.low_stock, 'alert' if summary.counts.low_stock else '') }}
+    {{ kpi('Out of stock', summary.counts.out_of_stock, 'alert' if summary.counts.out_of_stock else '') }}
+    {{ kpi('Expired', summary.counts.expired, 'alert' if summary.counts.expired else '') }}
+    {{ kpi('Expiring ≤ 30 days', summary.expiring_soon) }}{{ kpi('Check overdue', summary.check_overdue) }}
+</div>
+<div class="panel-card">
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.first_aid') }}">
+        <label>Search<input type="search" name="q" value="{{ q }}"></label>
+        <label>Status<select name="status"><option value="">All</option>{% for k, v in statuses.items() %}<option value="{{ k }}" {% if k == status %}selected{% endif %}>{{ v[0] }}</option>{% endfor %}</select></label>
+        <label>Cabinet<select name="location"><option value="">All</option>{% for l in locations %}<option {% if l == location %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+        <button class="btn-secondary" type="submit"><i class="fas fa-filter"></i> Filter</button>
+    </form>
+    {% if items %}
+    <div class="mod-table-wrap"><table class="mod-table">
+        <thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Reorder at</th><th>Expiry</th><th>Status</th><th>Last checked</th><th>Actions</th></tr></thead><tbody>
+        {% for i in items %}
+        <tr>
+            <td><strong>{{ i.item_name }}</strong><span class="sub">{{ i.cabinet_location }}</span></td>
+            <td class="num">{{ i.quantity }}</td><td class="num">{{ i.reorder_level }}</td>
+            <td>{{ i.expiry_label or '—' }}{% if i.expiring_soon %}<span class="sub" style="color:#a16207">in {{ i.days_to_expiry }} day(s)</span>{% endif %}</td>
+            <td>{{ badge(i.status_label, i.status_class) }}</td>
+            <td>{{ i.last_checked_label or 'Never' }}{% if i.check_overdue %}<span class="sub" style="color:#a16207">Check overdue</span>{% endif %}</td>
+            <td>{% if has_perm('safety.manage') %}<div class="mod-actions">
+                <details class="mod-edit"><summary class="btn-action">Use / restock</summary><div class="mod-edit-body">
+                    <form class="mod-form" method="POST" action="{{ url_for('modules.first_aid_adjust', item_id=i.id) }}">{{ csrf() }}
+                        <label>Action<select name="direction"><option value="use">Used / removed</option><option value="restock">Restocked / added</option></select></label>
+                        <label>Amount<input type="number" name="amount" min="1" required></label>
+                        <label>New expiry (restock only)<input type="date" name="expiry_date"></label>
+                        <label>Reason<input name="reason" maxlength="200" placeholder="e.g. Incident INC-…"></label>
+                        <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Apply</button></div></form></div></details>
+                <form method="POST" action="{{ url_for('modules.first_aid_check', item_id=i.id) }}">{{ csrf() }}<button class="btn-action" type="submit"><i class="fas fa-check"></i> Checked</button></form>
+                <details class="mod-edit"><summary class="btn-action"><i class="fas fa-pen"></i> Edit</summary><div class="mod-edit-body">
+                    <form class="mod-form" method="POST" action="{{ url_for('modules.first_aid_save') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ i.id }}">{{ item_fields(i) }}
+                        <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save</button></div></form></div></details>
+                {{ delete_form(url_for('modules.first_aid_delete', item_id=i.id), 'Delete this item?') }}
+            </div>{% endif %}</td>
+        </tr>{% endfor %}</tbody></table></div>
+    {{ render_pagination(pagination) }}
+    {% else %}{{ empty('fa-kit-medical', 'No supplies tracked', 'Add the contents of each first-aid cabinet.') }}{% endif %}
+</div>
+{% endblock %}
+{% block modals %}
+{% if has_perm('safety.manage') %}
+{% call modal('aid-modal', 'First Aid Supplies', 'Add supply item') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.first_aid_save') }}">{{ csrf() }}{{ item_fields() }}
+    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Add item</button></div>
+</form>
+{% endcall %}
+{% endif %}
+{% endblock %}

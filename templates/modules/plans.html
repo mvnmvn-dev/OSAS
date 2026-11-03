@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% from 'macros/pagination.html' import render_pagination %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, delete_form %}
+{% block title %}Evacuation Plans | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block page_actions %}
+{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="plan-modal"><i class="fas fa-plus"></i> New Plan / Version</button>{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="mod-kpis">
+    {{ kpi('Buildings with current plan', coverage.covered ~ ' / ' ~ coverage.buildings, 'good' if coverage.buildings and coverage.covered == coverage.buildings else '') }}
+    {{ kpi('Coverage', coverage.percent ~ '%') }}
+    {{ kpi('Awaiting approval', coverage.pending, 'alert' if coverage.pending else '') }}
+</div>
+<div class="panel-card">
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.plans') }}">
+        <label>Building<select name="building"><option value="">All buildings</option>{% for b in buildings %}<option value="{{ b.id }}" {% if building_id == b.id %}selected{% endif %}>{{ b.building_name }}</option>{% endfor %}</select></label>
+        <button class="btn-secondary" type="submit"><i class="fas fa-filter"></i> Filter</button>
+    </form>
+    {% if plans %}
+    <div class="mod-table-wrap"><table class="mod-table">
+        <thead><tr><th>Plan</th><th>Version</th><th>Status</th><th>Assembly area</th><th>Map</th><th>Actions</th></tr></thead>
+        <tbody>
+        {% for p in plans %}
+        <tr>
+            <td><strong>{{ p.plan_name }}</strong><span class="sub">{{ p.building_name }} · {{ p.floor_label }}</span>
+                {% if p.notes %}<span class="sub">{{ p.notes }}</span>{% endif %}</td>
+            <td>v{{ p.version_no }}</td>
+            <td>{{ badge(p.status_label, p.status_class) }}{% if p.approved_at %}<span class="sub">Approved {{ p.approved_at|string|truncate(10, True, '') }}</span>{% endif %}</td>
+            <td>{{ p.assembly_zone or '—' }}</td>
+            <td>{% if p.has_map %}<a href="{{ url_for('modules.plan_map', plan_id=p.id) }}" target="_blank" rel="noopener">View</a> · <a href="{{ url_for('modules.plan_map', plan_id=p.id, download=1) }}">Download</a>{% else %}<span class="mod-muted">No map attached</span>{% endif %}</td>
+            <td>{% if has_perm('safety.manage') %}<div class="mod-actions">
+                {% if not p.active and not p.approved_at %}
+                <form method="POST" action="{{ url_for('modules.plan_approve', plan_id=p.id) }}">{{ csrf() }}<button class="btn-action primary" type="submit"><i class="fas fa-check"></i> Approve</button></form>{% endif %}
+                {% if not p.active %}{{ delete_form(url_for('modules.plan_delete', plan_id=p.id), 'Delete this plan version and its map file?') }}{% endif %}
+            </div>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody></table></div>
+    {{ render_pagination(pagination) }}
+    {% else %}{{ empty('fa-map', 'No evacuation plans yet', 'Add a plan for each building and floor, attach the evacuation map and choose the assembly area.') }}{% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+{% if has_perm('safety.manage') %}
+{% call modal('plan-modal', 'Evacuation Plans', 'New plan or new version', 'Uploading a plan for an existing building and floor creates the next version, which replaces the current one once approved.') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.plan_save') }}" enctype="multipart/form-data">{{ csrf() }}
+    <label>Building<select name="building_id"><option value="">— Select —</option>{% for b in buildings %}<option value="{{ b.id }}">{{ b.building_name }}</option>{% endfor %}</select></label>
+    <label>…or new building name<input name="new_building" maxlength="150" placeholder="Only if not listed"></label>
+    <label>Floor / area<input name="floor_label" required maxlength="40" placeholder="e.g. Ground floor"></label>
+    <label>Primary assembly area<select name="assembly_zone_id" required><option value="">— Select —</option>{% for z in assembly_zones %}<option value="{{ z.id }}">{{ z.zone_name }}</option>{% endfor %}</select></label>
+    <label class="span-all">Plan name (optional)<input name="plan_name" maxlength="180"></label>
+    <label class="span-all">Evacuation map (PDF, PNG, JPG or WEBP · max 10 MB)<input type="file" name="map_file" accept=".pdf,.png,.jpg,.jpeg,.webp"></label>
+    <label class="span-all">Route &amp; assembly notes<textarea name="notes" rows="3" maxlength="2000" placeholder="Primary and alternate exits, stairwells to avoid, accessibility routes…"></textarea></label>
+    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save plan</button></div>
+</form>
+{% endcall %}
+{% endif %}
+{% endblock %}

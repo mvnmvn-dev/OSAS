@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from 'macros/pagination.html' import render_pagination %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty %}
+{% block title %}Risk Assessment | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block page_actions %}
+{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="risk-modal"><i class="fas fa-plus"></i> Assess Hazard</button>{% endif %}
+{% endblock %}
+{% macro risk_fields(r=None) %}
+    <label class="span-all">Hazard<input name="hazard_title" required maxlength="180" value="{{ r.hazard_title if r else '' }}"></label>
+    <label>Zone<select name="zone_id" required>{% for z in zones %}<option value="{{ z.id }}" {% if r and r.zone_id == z.id %}selected{% endif %}>{{ z.zone_name }}</option>{% endfor %}</select></label>
+    <label>Likelihood<select name="likelihood">{% for k, v in likelihoods.items() %}<option value="{{ k }}" {% if (r.likelihood if r else 3) == k %}selected{% endif %}>{{ k }} · {{ v }}</option>{% endfor %}</select></label>
+    <label>Severity<select name="severity">{% for k, v in severities.items() %}<option value="{{ k }}" {% if (r.severity if r else 3) == k %}selected{% endif %}>{{ k }} · {{ v }}</option>{% endfor %}</select></label>
+    <label class="span-all">Description<textarea name="hazard_description" rows="2" maxlength="2000">{{ (r.hazard_description or '') if r else '' }}</textarea></label>
+    <label class="span-all">Mitigation plan<textarea name="mitigation_plan" rows="2" maxlength="2000">{{ (r.mitigation_plan or '') if r else '' }}</textarea></label>
+{% endmacro %}
+{% block content %}
+<div class="mod-kpis">
+    {{ kpi('Active risks', summary.active) }}
+    {{ kpi('Critical', summary.levels['Critical'], 'alert' if summary.levels['Critical'] else '') }}
+    {{ kpi('High', summary.levels['High'], 'alert' if summary.levels['High'] else '') }}
+    {{ kpi('Medium', summary.levels['Medium']) }}
+    {{ kpi('Low', summary.levels['Low']) }}
+    {{ kpi('Resolved', summary.resolved, 'good') }}
+</div>
+<div class="panel-card" style="margin-bottom:1.25rem">
+    <h3 class="section-title">Risk matrix (active risks)</h3>
+    <p class="section-subtitle">Score = likelihood × severity. 1–4 low · 5–9 medium · 10–14 high · 15–25 critical.</p>
+    <div class="risk-matrix">
+        {% for row in matrix %}
+        <div class="axis">L{{ row[0].likelihood }}</div>
+        {% for c in row %}<div class="cell {{ c.level }} {% if c.count %}has{% endif %}" title="Likelihood {{ c.likelihood }} × Severity {{ c.severity }}">{{ c.count or '' }}</div>{% endfor %}
+        {% endfor %}
+        <div></div>{% for s in range(1,6) %}<div class="axis">S{{ s }}</div>{% endfor %}
+    </div>
+</div>
+<div class="panel-card">
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.risks') }}">
+        <label>Status<select name="status"><option value="">All</option>{% for s in statuses %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s.title() }}</option>{% endfor %}</select></label>
+        <label>Level<select name="level"><option value="">All</option>{% for l in ['Critical','High','Medium','Low'] %}<option {% if l.lower() == level.lower() %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>
+        <button class="btn-secondary" type="submit"><i class="fas fa-filter"></i> Filter</button>
+    </form>
+    {% if risks %}
+    <div class="mod-table-wrap"><table class="mod-table">
+        <thead><tr><th>Hazard</th><th>Zone</th><th class="num">L×S</th><th>Level</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        {% for r in risks %}
+        <tr>
+            <td><strong>{{ r.hazard_title }}</strong>{% if r.mitigation_plan %}<span class="sub">{{ r.mitigation_plan|truncate(140) }}</span>{% endif %}<span class="sub">Logged {{ r.created_label }}{% if r.assessor_name %} by {{ r.assessor_name }}{% endif %}</span></td>
+            <td>{{ r.zone_name }}</td>
+            <td class="num">{{ r.likelihood }}×{{ r.severity }} = {{ r.score }}</td>
+            <td>{{ badge(r.level, r.level_class) }}</td>
+            <td>{{ badge(r.status.title(), 'info') }}</td>
+            <td>{% if has_perm('safety.manage') %}<div class="mod-actions">
+                {% if r.next_statuses %}<details class="mod-edit"><summary class="btn-action">Change status</summary><div class="mod-edit-body">
+                    <form class="mod-form" method="POST" action="{{ url_for('modules.risk_status', risk_id=r.id) }}">{{ csrf() }}
+                        <label>New status<select name="status">{% for s in r.next_statuses %}<option value="{{ s }}">{{ s.title() }}</option>{% endfor %}</select></label>
+                        <label class="span-all">Note (required to accept a risk)<input name="note" maxlength="1000"></label>
+                        <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Apply</button></div></form></div></details>{% endif %}
+                <details class="mod-edit"><summary class="btn-action"><i class="fas fa-pen"></i> Edit</summary><div class="mod-edit-body">
+                    <form class="mod-form" method="POST" action="{{ url_for('modules.risk_save') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ r.id }}">{{ risk_fields(r) }}
+                        <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save</button></div></form></div></details>
+            </div>{% endif %}</td>
+        </tr>
+        {% endfor %}</tbody></table></div>
+    {{ render_pagination(pagination) }}
+    {% else %}{{ empty('fa-shield-halved', 'No risk assessments', 'Assess a hazard to start the register.') }}{% endif %}
+</div>
+{% endblock %}
+{% block modals %}
+{% if has_perm('safety.manage') %}
+{% call modal('risk-modal', 'Risk Assessment', 'Assess a hazard', 'Score is calculated automatically from likelihood and severity.') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.risk_save') }}">{{ csrf() }}{{ risk_fields() }}
+    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Record risk</button></div>
+</form>
+{% endcall %}
+{% endif %}
+{% endblock %}

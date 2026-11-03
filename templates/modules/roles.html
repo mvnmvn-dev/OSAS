@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, delete_form %}
+{% block title %}Emergency Roles | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block page_actions %}{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="role-modal"><i class="fas fa-plus"></i> Add Role</button>{% endif %}{% endblock %}
+{% block content %}
+<div class="mod-kpis">
+    {{ kpi('Roles', coverage.total) }}{{ kpi('Assigned', coverage.assigned, 'good') }}
+    {{ kpi('Unassigned', coverage.unassigned, 'alert' if coverage.unassigned else '') }}
+    {{ kpi('No backup', coverage.without_backup) }}{{ kpi('Coverage', coverage.percent ~ '%') }}
+</div>
+<div class="panel-card">
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.roles') }}">
+        <label>Scope<select name="drill"><option value="">All roles</option>{% for d in drills %}<option value="{{ d.id }}" {% if drill_id == d.id %}selected{% endif %}>{{ d.title }}</option>{% endfor %}</select></label>
+        <button class="btn-secondary" type="submit"><i class="fas fa-filter"></i> Filter</button>
+    </form>
+    {% if roles %}
+    <div class="mod-table-wrap"><table class="mod-table">
+        <thead><tr><th>Role</th><th>Scope</th><th>Primary</th><th>Backup</th><th></th></tr></thead><tbody>
+        {% for r in roles %}
+        <tr>
+            <td><strong>{{ r.role_name }}</strong><span class="sub">{{ r.responsibility }}</span></td>
+            <td>{{ r.drill_title or 'Standing' }}</td>
+            <td>{% if r.is_assigned %}{{ r.assigned_name }}<span class="sub">since {{ r.assigned_label }}</span>{% else %}{{ badge('Unassigned', 'danger') }}{% endif %}</td>
+            <td>{{ r.backup_name or '—' }}</td>
+            <td>{% if has_perm('safety.manage') %}<div class="mod-actions">
+                <details class="mod-edit"><summary class="btn-action">Assign</summary><div class="mod-edit-body">
+                    <form class="mod-form" method="POST" action="{{ url_for('modules.role_assign', role_id=r.id) }}">{{ csrf() }}
+                        <label>Primary<select name="assigned_user_id"><option value="">— Unassigned —</option>{% for u in users %}<option value="{{ u.id }}" {% if r.assigned_user_id == u.id %}selected{% endif %}>{{ u.full_name }} ({{ u.role.replace('_',' ') }})</option>{% endfor %}</select></label>
+                        <label>Backup<select name="backup_user_id"><option value="">— None —</option>{% for u in users %}<option value="{{ u.id }}" {% if r.backup_user_id == u.id %}selected{% endif %}>{{ u.full_name }}</option>{% endfor %}</select></label>
+                        <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save</button></div></form></div></details>
+                {{ delete_form(url_for('modules.role_delete', role_id=r.id), 'Delete this role?') }}
+            </div>{% endif %}</td>
+        </tr>{% endfor %}</tbody></table></div>
+    {% else %}{{ empty('fa-user-tag', 'No roles defined', 'Add the roles needed during an emergency.') }}{% endif %}
+</div>
+{% endblock %}
+{% block modals %}
+{% if has_perm('safety.manage') %}
+{% call modal('role-modal', 'Emergency Roles', 'Add emergency role') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.role_save') }}">{{ csrf() }}
+    <label>Role name<input name="role_name" required maxlength="120"></label>
+    <label>Scope<select name="drill_id"><option value="">Standing (all emergencies)</option>{% for d in drills %}<option value="{{ d.id }}">{{ d.title }}</option>{% endfor %}</select></label>
+    <label class="span-all">Responsibility<textarea name="responsibility" rows="3" required maxlength="1000"></textarea></label>
+    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Create role</button></div>
+</form>
+{% endcall %}
+{% endif %}
+{% endblock %}

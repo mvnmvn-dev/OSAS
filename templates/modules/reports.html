@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from 'modules/_ui.html' import kpi, empty, badge %}
+{% block title %}Compliance Reports | BCP Safety and Security{% endblock %}
+{% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
+{% block content %}
+<div class="panel-card" style="margin-bottom:1.25rem">
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.reports') }}">
+        <label>Report<select name="report">{% for k, label, hint, ranged in report_types %}<option value="{{ k }}" {% if k == key %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label>Period<select name="range">{% for k, label in presets %}<option value="{{ k }}" {% if k == preset %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+        <label>From<input type="date" name="start" value="{{ start }}"></label>
+        <label>To<input type="date" name="end" value="{{ end }}"></label>
+        <button class="btn-primary-square" type="submit"><i class="fas fa-eye"></i> Preview</button>
+        {% if has_perm('reports.manage') and report %}
+        {% for fmt, label in [('pdf','PDF'),('excel','Excel'),('csv','CSV')] %}
+        <a class="btn-secondary" href="{{ url_for('modules.report_download', report=key, range=preset, start=start, end=end, format=fmt) }}"><i class="fas fa-download"></i> {{ label }}</a>{% endfor %}
+        {% endif %}
+    </form>
+    <p class="mod-muted" style="font-size:.7rem;margin:0">Dates apply only when Period is “Custom range”. Snapshot reports always show current data.</p>
+</div>
+{% if error %}<div class="mod-alert danger"><i class="fas fa-circle-exclamation"></i><div>{{ error }}</div></div>{% endif %}
+{% if report %}
+<div class="panel-card">
+    <h2 class="section-title">{{ report.title }}</h2>
+    <p class="section-subtitle">{{ report.period }} · generated {{ report.generated }}</p>
+    <div class="mod-kpis">{% for label, value in report.summary %}{{ kpi(label, value) }}{% endfor %}</div>
+    {% if shown_rows %}
+    <div class="mod-table-wrap"><table class="mod-table">
+        <thead><tr>{% for h in report.headers %}<th>{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for row in shown_rows %}<tr>{% for cell in row %}<td>{% if cell == 'Needs attention' %}{{ badge(cell, 'danger') }}{% elif cell == 'Meets target' %}{{ badge(cell, 'success') }}{% else %}{{ cell }}{% endif %}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table></div>
+    {% if report.rows|length > shown_rows|length %}<p class="mod-muted">Showing the first {{ shown_rows|length }} of {{ report.rows|length }} rows. Export for the complete data.</p>{% endif %}
+    {% else %}{{ empty('fa-file-circle-question', 'No records', 'Nothing matches this report and period.') }}{% endif %}
+</div>
+{% endif %}
+{% endblock %}

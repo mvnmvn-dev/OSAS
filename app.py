@@ -12,6 +12,7 @@ from models.user import User
 from routes.auth import auth_bp
 from routes.dashboard import dashboard_bp
 from routes.safety import safety_bp
+from routes.modules import modules_bp
 from routes.profile import profile_bp
 from routes.users import users_bp
 from routes.api import api_bp
@@ -37,7 +38,7 @@ def create_app():
     @login_manager.user_loader
     def load_user(user_id): return User.get_by_id(int(user_id))
     app.teardown_appcontext(close_db)
-    app.register_blueprint(auth_bp); app.register_blueprint(dashboard_bp); app.register_blueprint(safety_bp); app.register_blueprint(profile_bp); app.register_blueprint(users_bp); app.register_blueprint(api_bp)
+    app.register_blueprint(auth_bp); app.register_blueprint(dashboard_bp); app.register_blueprint(safety_bp); app.register_blueprint(modules_bp); app.register_blueprint(profile_bp); app.register_blueprint(users_bp); app.register_blueprint(api_bp)
     @app.before_request
     def enforce_rbac():
         if current_user.is_authenticated and request.endpoint and not check_endpoint_access(request.endpoint):
