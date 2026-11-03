@@ -1050,3 +1050,29 @@ document.addEventListener('DOMContentLoaded', () => {
     initCommandPalette();
     initOnboardingTour();
 });
+
+/* Module alert banners (.mod-alert): dismissible and auto-hide instead of staying on screen. */
+(function initModAlerts() {
+    const AUTO_HIDE_MS = 8000;
+    document.querySelectorAll('.mod-alert').forEach((alertEl) => {
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'mod-alert-close';
+        close.setAttribute('aria-label', 'Dismiss');
+        close.innerHTML = '&times;';
+        alertEl.appendChild(close);
+
+        let timer = null;
+        const dismiss = () => {
+            clearTimeout(timer);
+            alertEl.classList.add('is-hiding');
+            setTimeout(() => alertEl.remove(), 400);
+        };
+        const start = () => { timer = setTimeout(dismiss, AUTO_HIDE_MS); };
+        close.addEventListener('click', dismiss);
+        // Keep it visible while the user is reading it.
+        alertEl.addEventListener('mouseenter', () => clearTimeout(timer));
+        alertEl.addEventListener('mouseleave', start);
+        start();
+    });
+})();

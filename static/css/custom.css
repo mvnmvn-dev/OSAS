@@ -6898,3 +6898,7 @@ body.dark-mode .mod-toolbar input, body.dark-mode .mod-toolbar select,
 body.dark-mode .mod-form input, body.dark-mode .mod-form select, body.dark-mode .mod-form textarea,
 body.dark-mode .mod-inline-form input, body.dark-mode .mod-inline-form select { background: #0f172a; border-color: #334155; color: #e2e8f0; }
 body.dark-mode details.mod-edit > .mod-edit-body { background: #0f172a; border-color: #334155; }
+.mod-alert { position: relative; padding-right: 2.2rem; transition: opacity .35s ease, transform .35s ease, max-height .4s ease, margin .4s ease, padding .4s ease; max-height: 12rem; overflow: hidden; }
+.mod-alert.is-hiding { opacity: 0; transform: translateY(-6px); max-height: 0; margin-top: 0; margin-bottom: 0; padding-top: 0; padding-bottom: 0; }
+.mod-alert-close { position: absolute; top: .45rem; right: .6rem; border: 0; background: transparent; color: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; opacity: .65; }
+.mod-alert-close:hover { opacity: 1; }
