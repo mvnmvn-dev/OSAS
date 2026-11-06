@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from 'macros/pagination.html' import render_pagination %}
-{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, select_options, delete_form %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, select_options %}
 {% block title %}Emergency Contacts | BCP Safety and Security{% endblock %}
 {% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
 {% block page_actions %}
@@ -58,7 +58,6 @@
                     </details>
                     <form method="POST" action="{{ url_for('modules.contact_toggle', contact_id=c.id) }}">{{ csrf() }}<input type="hidden" name="active" value="{{ 0 if c.active else 1 }}">
                         <button class="btn-action" type="submit">{{ 'Deactivate' if c.active else 'Activate' }}</button></form>
-                    {{ delete_form(url_for('modules.contact_delete', contact_id=c.id), 'Delete this contact permanently?') }}
                 </div>
                 {% endif %}
             </td>

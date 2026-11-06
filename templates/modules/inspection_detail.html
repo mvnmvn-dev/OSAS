@@ -32,7 +32,6 @@
                 <div class="mod-form-actions"><button class="btn-action primary" type="submit">Save result</button></div>
             </div>
         </form>
-        <form method="POST" action="{{ url_for('modules.inspection_item_delete', inspection_id=i.id, item_id=it.id) }}" onsubmit="return confirm('Remove this item?');" style="margin-top:.3rem">{{ csrf() }}<button class="btn-action danger" type="submit">Remove item</button></form>
         {% else %}
             {% if it.finding %}<p class="sub mod-muted" style="margin:.4rem 0 0">Finding: {{ it.finding }}</p>{% endif %}
             {% if it.corrective_action %}<p class="sub mod-muted" style="margin:.2rem 0 0">Action: {{ it.corrective_action }}</p>{% endif %}

@@ -23,7 +23,8 @@
     {{ kpi('Low', summary.levels['Low']) }}
     {{ kpi('Resolved', summary.resolved, 'good') }}
 </div>
-<div class="panel-card" style="margin-bottom:1.25rem">
+<div class="risk-register-layout">
+<div class="panel-card risk-matrix-card" style="margin-bottom:1.25rem">
     <h3 class="section-title">Risk matrix (active risks)</h3>
     <p class="section-subtitle">Score = likelihood × severity. 1–4 low · 5–9 medium · 10–14 high · 15–25 critical.</p>
     <div class="risk-matrix">
@@ -34,7 +35,7 @@
         <div></div>{% for s in range(1,6) %}<div class="axis">S{{ s }}</div>{% endfor %}
     </div>
 </div>
-<div class="panel-card">
+<div class="panel-card risk-table-card">
     <form class="mod-toolbar" method="GET" action="{{ url_for('modules.risks') }}">
         <label>Status<select name="status"><option value="">All</option>{% for s in statuses %}<option value="{{ s }}" {% if s == status %}selected{% endif %}>{{ s.title() }}</option>{% endfor %}</select></label>
         <label>Level<select name="level"><option value="">All</option>{% for l in ['Critical','High','Medium','Low'] %}<option {% if l.lower() == level.lower() %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></label>

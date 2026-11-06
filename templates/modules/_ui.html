@@ -26,7 +26,3 @@
 {% macro select_options(pairs, selected='') %}
 {% for value, label in pairs %}<option value="{{ value }}" {% if value|string == selected|string %}selected{% endif %}>{{ label }}</option>{% endfor %}
 {% endmacro %}
-
-{% macro delete_form(action, message, label='Delete') %}
-<form method="POST" action="{{ action }}" onsubmit="return confirm('{{ message }}');">{{ csrf() }}<button class="btn-action danger" type="submit"><i class="fas fa-trash"></i> {{ label }}</button></form>
-{% endmacro %}

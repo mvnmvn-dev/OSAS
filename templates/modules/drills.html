@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from 'macros/pagination.html' import render_pagination %}
-{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, select_options, delete_form %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, select_options %}
 {% block title %}Drill Scheduling | BCP Safety and Security{% endblock %}
 {% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
 {% block page_actions %}
@@ -68,7 +68,6 @@
                             {{ drill_fields(d) }}
                             <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save changes</button></div>
                         </form></div></details>
-                    {{ delete_form(url_for('modules.drill_delete', drill_id=d.id), 'Delete this drill?') }}
                     {% endif %}
                     <a class="btn-action" href="{{ url_for('modules.roles', drill=d.id) }}"><i class="fas fa-user-tag"></i> Roles</a>
                 </div>

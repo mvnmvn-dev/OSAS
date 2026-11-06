@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from 'macros/pagination.html' import render_pagination %}
-{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, delete_form %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty %}
 {% block title %}First Aid Supplies | BCP Safety and Security{% endblock %}
 {% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
 {% block page_actions %}{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="aid-modal"><i class="fas fa-plus"></i> Add Item</button>{% endif %}{% endblock %}
@@ -47,10 +47,7 @@
                         <label>Reason<input name="reason" maxlength="200" placeholder="e.g. Incident INC-…"></label>
                         <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Apply</button></div></form></div></details>
                 <form method="POST" action="{{ url_for('modules.first_aid_check', item_id=i.id) }}">{{ csrf() }}<button class="btn-action" type="submit"><i class="fas fa-check"></i> Checked</button></form>
-                <details class="mod-edit"><summary class="btn-action"><i class="fas fa-pen"></i> Edit</summary><div class="mod-edit-body">
-                    <form class="mod-form" method="POST" action="{{ url_for('modules.first_aid_save') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ i.id }}">{{ item_fields(i) }}
-                        <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save</button></div></form></div></details>
-                {{ delete_form(url_for('modules.first_aid_delete', item_id=i.id), 'Delete this item?') }}
+                <button type="button" class="btn-action" data-open-modal="edit-aid-modal" data-aid-id="{{ i.id }}" data-aid-name="{{ i.item_name|e }}" data-aid-location="{{ i.cabinet_location|e }}" data-aid-quantity="{{ i.quantity }}" data-aid-reorder="{{ i.reorder_level }}" data-aid-expiry="{{ i.expiry_date|string|truncate(10, True, '') if i.expiry_date else '' }}"><i class="fas fa-pen"></i> Edit</button>
             </div>{% endif %}</td>
         </tr>{% endfor %}</tbody></table></div>
     {{ render_pagination(pagination) }}
@@ -58,6 +55,13 @@
 </div>
 {% endblock %}
 {% block modals %}
+{% if has_perm('safety.manage') %}
+{% call modal('edit-aid-modal', 'First Aid Supplies', 'Edit supply item') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.first_aid_save') }}" id="edit-aid-form">{{ csrf() }}<input type="hidden" name="id">{{ item_fields() }}
+<div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save item</button></div></form>
+{% endcall %}
+<script>document.addEventListener('click',function(e){var b=e.target.closest('[data-aid-id]');if(!b)return;var f=document.getElementById('edit-aid-form');f.elements.id.value=b.dataset.aidId;f.elements.item_name.value=b.dataset.aidName;f.elements.cabinet_location.value=b.dataset.aidLocation;f.elements.quantity.value=b.dataset.aidQuantity;f.elements.reorder_level.value=b.dataset.aidReorder;f.elements.expiry_date.value=b.dataset.aidExpiry||'';});</script>
+{% endif %}
 {% if has_perm('safety.manage') %}
 {% call modal('aid-modal', 'First Aid Supplies', 'Add supply item') %}
 <form class="mod-form" method="POST" action="{{ url_for('modules.first_aid_save') }}">{{ csrf() }}{{ item_fields() }}

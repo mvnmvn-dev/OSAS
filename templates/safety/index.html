@@ -9,7 +9,7 @@
     'teams': 'Teams & Checkpoints',
     'reports': 'Reports & Analytics',
     'activity': 'Activity Log',
-    'osas': 'OSAS Operations',
+    'osas': 'Inspections',
     'visitors': 'Visitors & Gate'
 } %}
 {% block title %}{{ titles.get(section, 'Campus Security Dashboard') }} | BCP Safety and Security{% endblock %}
@@ -40,6 +40,9 @@
 {% elif section == 'teams' %}
 <button class="btn-secondary" data-open-modal="checkpoint-modal"><i class="fas fa-location-crosshairs"></i> Add Checkpoint</button>
 <button class="btn-primary-square" data-open-modal="team-modal"><i class="fas fa-plus"></i> Add Team</button>
+{% elif section == 'visitors' %}
+<button class="btn-secondary" data-open-modal="visitor-validate-modal"><i class="fas fa-qrcode"></i> Verify Pass</button>
+<button class="btn-primary-square" data-open-modal="visitor-modal"><i class="fas fa-user-plus"></i> Register Visitor</button>
 {% elif section == 'reports' %}
 <button class="btn-primary-square" data-open-modal="report-modal"><i class="fas fa-file-export"></i> Export Report</button>
 {% endif %}
@@ -374,6 +377,7 @@
         </div>
     </div>
     <script type="application/json" id="safety-analytics-data">{{ safety.analytics|tojson }}</script>
+    <span class="live-refresh-note" aria-live="polite"><i class="fas fa-rotate"></i> Live data · refreshes every 30 seconds</span>
 </section>
 {% endif %}
 </div>
@@ -679,77 +683,12 @@
 
 {% elif section == 'patrol' %}
 
-{% if safety.risk_demo %}
-<section class="risk-demo-panel panel-card mb-6" aria-label="Predictive patrol risk model">
-    <div class="section-header">
-        <div>
-            <h2 class="section-title"><i class="fas fa-diagram-project"></i> Predictive Patrol Model</h2>
-            <p class="section-subtitle">{{ safety.risk_demo.model.type }} — not a trained machine-learning model</p>
-        </div>
-        <span class="status-badge status-info">HEURISTIC</span>
-    </div>
-    <ol class="risk-pipeline" aria-label="Risk to route pipeline">
-        {% for step in safety.risk_demo.pipeline %}
-        <li>{{ step }}</li>
-        {% endfor %}
-    </ol>
-    <div class="risk-demo-grid">
-        <div class="risk-demo-card">
-            <h3>Severity weights</h3>
-            <ul class="risk-weight-list">
-            {% for w in safety.risk_demo.model.severity_weights %}
-                <li><span>{{ w.label }}</span><strong>{{ w.value }}</strong></li>
-            {% endfor %}
-            </ul>
-            <p class="risk-demo-note">Recency half-life: {{ safety.risk_demo.model.half_life_days }} days · Window: {{ safety.risk_demo.model.window_days }} days · Missed patrol weight: {{ safety.risk_demo.model.missed_patrol_weight }}</p>
-        </div>
-        <div class="risk-demo-card">
-            <h3>{{ safety.risk_demo.sample.title }}</h3>
-            <ol class="risk-sample-steps">
-            {% for step in safety.risk_demo.sample.steps %}
-                <li>
-                    <strong>{{ step.label }}</strong>
-                    <span>{{ step.detail }}</span>
-                </li>
-            {% endfor %}
-            </ol>
-            <p class="risk-demo-score">Resulting score: <strong>{{ safety.risk_demo.sample.score }}</strong></p>
-            <p class="risk-demo-note">{{ safety.risk_demo.sample.note }}</p>
-        </div>
-        <div class="risk-demo-card">
-            <h3>Live top checkpoint{% if safety.risk_demo.top_checkpoint %} · {{ safety.risk_demo.top_checkpoint.code }}{% endif %}</h3>
-            {% if safety.risk_demo.top_checkpoint %}
-            <p class="risk-demo-score">{{ safety.risk_demo.top_checkpoint.name }} · Score <strong>{{ safety.risk_demo.top_checkpoint.score }}</strong></p>
-            {% if safety.risk_demo.top_checkpoint.contributions %}
-            <ul class="risk-contrib-list">
-            {% for c in safety.risk_demo.top_checkpoint.contributions %}
-                <li>
-                    <span class="severity-badge severity-{% if c.kind == 'patrol_exception' %}medium{% else %}{{ c.priority|lower }}{% endif %}">{{ c.priority }}</span>
-                    <div>
-                        <strong>{{ c.label }}</strong>
-                        <span>{{ c.severity_weight }} x decay {{ c.decay }} ({{ c.days_ago }}d) = {{ c.contribution }}</span>
-                    </div>
-                </li>
-            {% endfor %}
-            </ul>
-            {% else %}
-            <p class="risk-demo-note">No open incidents or patrol exceptions in the scoring window — baseline score applied.</p>
-            {% endif %}
-            {% else %}
-            <p class="risk-demo-note">No checkpoints available for live breakdown.</p>
-            {% endif %}
-        </div>
-    </div>
-    <p class="risk-demo-blurb">{{ safety.risk_demo.model.defense_blurb }}</p>
-</section>
-{% endif %}
-
 <div class="dashboard-grid safety-grid mb-6">
     <div class="panel-card route-board" id="route-board">
         <div class="section-header">
             <div>
-                <h2 class="section-title">Recommended checkpoint sequence</h2>
-                <p class="section-subtitle">Incident data → risk score → priority checkpoints → patrol route</p>
+                <h2 class="section-title"><i class="fas fa-route"></i> Patrol route roadmap</h2>
+                <p class="section-subtitle">Live roadmap: incidents and scan history → risk priority → checkpoint order → assigned patrol route</p>
             </div>
             <span class="status-badge status-success">{{ safety.patrol.duration|upper }} · {{ safety.patrol.distance|upper }}</span>
         </div>
@@ -772,8 +711,9 @@
             </div>
             <div class="route-side-card">
                 <h3>Why this order</h3>
-                <p>{{ safety.route.risk_reason }}</p>
-                <p class="risk-demo-note">{{ safety.route.routing_note }}</p>
+                <p><strong>1. Prioritize:</strong> {{ safety.route.risk_reason }}</p>
+                <p><strong>2. Route:</strong> {{ safety.route.routing_note }}</p>
+                <p><strong>3. Execute:</strong> scan each checkpoint in the numbered order. The board refreshes automatically every 30 seconds.</p>
                 <div class="route-summary">
                     <div><span>Engine</span><strong>{{ safety.patrol.engine }}</strong></div>
                     <div><span>Stops</span><strong>{{ safety.route.checkpoints }}</strong></div>
@@ -1014,6 +954,7 @@
         </div>
     </div>
     <script type="application/json" id="safety-analytics-data">{{ safety.analytics|tojson }}</script>
+    <span class="live-refresh-note" aria-live="polite"><i class="fas fa-rotate"></i> Live data · refreshes every 30 seconds</span>
 </section>
 {% endif %}
 </div>
@@ -1468,6 +1409,12 @@ document.addEventListener('click', function (event) {
   }
 });
 
+(function initLiveSafetyRefresh() {
+  if (['safety.patrol', 'safety.index'].indexOf('{{ request.endpoint }}') === -1) return;
+  window.setInterval(function () {
+    if (document.visibilityState === 'visible' && !document.querySelector('.modal.open')) window.location.reload();
+  }, 30000);
+})();
 (function initSafetyAnalytics() {
   var raw = document.getElementById('safety-analytics-data');
   if (!raw || typeof initSafetyDashboardCharts !== 'function') return;

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from 'macros/pagination.html' import render_pagination %}
-{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, delete_form %}
+{% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty %}
 {% block title %}Evacuation Plans | BCP Safety and Security{% endblock %}
 {% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
 {% block page_actions %}
@@ -33,7 +33,7 @@
             <td>{% if has_perm('safety.manage') %}<div class="mod-actions">
                 {% if not p.active and not p.approved_at %}
                 <form method="POST" action="{{ url_for('modules.plan_approve', plan_id=p.id) }}">{{ csrf() }}<button class="btn-action primary" type="submit"><i class="fas fa-check"></i> Approve</button></form>{% endif %}
-                {% if not p.active %}{{ delete_form(url_for('modules.plan_delete', plan_id=p.id), 'Delete this plan version and its map file?') }}{% endif %}
+                {% if not p.active %}{% endif %}
             </div>{% endif %}</td>
         </tr>
         {% endfor %}

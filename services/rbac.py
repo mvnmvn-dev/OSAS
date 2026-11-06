@@ -60,7 +60,6 @@ NAV_SECTIONS = [
         {'label':'Risk Assessment','endpoint':'modules.risks','icon':'fa-triangle-exclamation','permission':'safety.view'},
         {'label':'First Aid Supplies','endpoint':'modules.first_aid','icon':'fa-kit-medical','permission':'safety.view'},
         {'label':'Visitors & Gate','endpoint':'safety.visitors','icon':'fa-id-card','permission':'visitor.view'},
-        {'label':'OSAS Operations','endpoint':'safety.osas','icon':'fa-shield-halved','permission':'safety.view'},
     ]},
     {'label':'Intelligence','items':[
         {'label':'Reports & Analytics','endpoint':'safety.reports','icon':'fa-chart-line','permission':'reports.view'},

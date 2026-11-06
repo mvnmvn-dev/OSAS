@@ -23,8 +23,8 @@ SECTION_META = {
         'subtitle': 'Track safety inspections, findings, and corrective actions by campus zone.',
     },
     'osas': {
-        'title': 'OSAS Operations',
-        'subtitle': 'Review open OSAS actions, compliance items, and campus readiness tasks.',
+        'title': 'Inspections',
+        'subtitle': 'Review inspection findings, corrective actions, and campus readiness tasks in one workflow.',
     },
     'emergency': {
         'title': 'Emergency Plans',
@@ -128,7 +128,8 @@ def incidents():
 @login_required
 @require_permission('safety.view')
 def osas():
-    return page('osas')
+    # OSAS actions are now integrated into the inspection register.
+    return redirect(url_for('safety.inspections'))
 
 
 @safety_bp.route('/inspections')
@@ -436,8 +437,12 @@ def save_checkpoint():
     if not code or not name:
         flash('Checkpoint code and name are required.', 'error')
     else:
-        safety_svc.save_checkpoint(code, name, method, _actor(), _uid())
-        flash(f'Checkpoint {code.upper()} saved and linked to patrol planning.', 'success')
+        try:
+            safety_svc.save_checkpoint(code, name, method, _actor(), _uid())
+            flash(f'Checkpoint {code.upper()} saved and linked to patrol planning.', 'success')
+        except Exception as exc:
+            current_app.logger.exception('Checkpoint save failed')
+            flash(f'Checkpoint could not be saved: {exc}', 'error')
     return redirect(url_for('safety.teams'))
 
 

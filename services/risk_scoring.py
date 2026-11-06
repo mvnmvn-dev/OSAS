@@ -142,7 +142,7 @@ def compute_raw_incident_score(incidents, now=None):
 
 def explain_checkpoint_score(checkpoint_id, now=None, limit=5):
     """
-    Transparent breakdown for defense demos.
+    Transparent breakdown for operational review.
     Returns contributions that feed the weighted heuristic risk score.
     """
     now = now or datetime.now()
@@ -268,7 +268,7 @@ def sample_risk_calculation(priority="critical", days_ago=0.5, missed=1, missed_
         ],
         "score": score,
         "raw": round(raw, 3),
-        "note": "This is a transparent heuristic example for defense — not a trained machine-learning prediction.",
+        "note": "This is a transparent heuristic example for operational prioritization.",
     }
 
 
@@ -295,9 +295,9 @@ def risk_model_card():
         "half_life_days": HALF_LIFE_DAYS,
         "window_days": WINDOW_DAYS,
         "missed_patrol_weight": MISSED_PATROL_WEIGHT,
-        "defense_blurb": (
+        "operational_blurb": (
             "The predictive component uses a weighted heuristic risk-scoring model with exponential "
-            "time decay instead of a trained machine-learning model. Historical incidents, severity, "
+            "time decay. Historical incidents, severity, "
             "recency, and patrol exceptions contribute to the risk score, which prioritizes checkpoints "
             "and feeds patrol route generation."
         ),
