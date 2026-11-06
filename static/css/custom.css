@@ -6955,3 +6955,9 @@ body.dark-mode .confirmation-dialog .modal-subtitle {
 @media (max-width: 640px) {
     .general-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Keep the overview dashboard KPI cards in one top-level row only.
+   This also protects against stale duplicate blocks during manual template merges. */
+#general-dashboard-kpis ~ .dashboard-stats {
+    display: none !important;
+}

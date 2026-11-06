@@ -53,7 +53,7 @@
 <div class="ops-mobile-order">
 {% endif %}
 
-<div class="dashboard-stats {% if section == 'overview' %}general-kpi-grid{% else %}grid-4{% endif %} mb-6 module-kpi-row">
+<div id="general-dashboard-kpis" class="dashboard-stats {% if section == 'overview' %}general-kpi-grid{% else %}grid-4{% endif %} mb-6 module-kpi-row">
 {% for card in safety.kpis %}
     {% if card.url %}
     <a href="{{ card.url }}" class="stat-card stat-card-link{% if card.theme %} stat-{{ card.theme }}{% endif %}"{% if status_filter and ('status=' ~ status_filter) in card.url %} aria-current="true"{% endif %}>
