@@ -22,7 +22,7 @@
     <div class="check-item {{ it.result }}">
         <div class="check-item-head"><span>{{ it.item_name }}</span>{{ badge(it.result|upper if it.result != 'na' else 'N/A', {'pass':'success','fail':'danger','pending':'warning','na':'info'}[it.result]) }}</div>
         {% if i.editable and has_perm('safety.manage') %}
-        <form method="POST" action="{{ url_for('modules.inspection_item_result', inspection_id=i.id, item_id=it.id) }}">{{ csrf() }}
+        <form method="POST" action="{{ url_for('modules.inspection_item_result', inspection_id=i.id, item_id=it.id) }}" data-confirm-title="Confirm action" data-confirm="Are you sure you want to continue with this action?">{{ csrf() }}
             <div class="check-choices">
                 {% for val, lab in [('pass','Pass'),('fail','Fail'),('na','N/A')] %}<label><input type="radio" name="result" value="{{ val }}" {% if it.result == val %}checked{% endif %} required> {{ lab }}</label>{% endfor %}
             </div>
@@ -37,7 +37,7 @@
             {% if it.corrective_action %}<p class="sub mod-muted" style="margin:.2rem 0 0">Action: {{ it.corrective_action }}</p>{% endif %}
         {% endif %}
         {% if it.result == 'fail' and has_perm('safety.manage') %}
-        <form method="POST" action="{{ url_for('modules.inspection_action_toggle', inspection_id=i.id, item_id=it.id) }}" style="margin-top:.4rem">{{ csrf() }}
+        <form method="POST" action="{{ url_for('modules.inspection_action_toggle', inspection_id=i.id, item_id=it.id) }}" style="margin-top:.4rem" data-confirm-title="Change contact status" data-confirm="Change this emergency contact’s active status?">{{ csrf() }}
             <input type="hidden" name="done" value="{{ 0 if it.action_done else 1 }}">
             <button class="btn-action" type="submit">{{ 'Reopen corrective action' if it.action_done else 'Mark corrective action done' }}</button>
             {% if it.action_done %}{{ badge('Action closed', 'success') }}{% else %}{{ badge('Action open', 'danger') }}{% endif %}
@@ -51,7 +51,7 @@
     {% if i.editable and has_perm('safety.manage') %}
     <div class="panel-card" style="margin-bottom:1rem">
         <h3 class="section-title">Add checklist item</h3>
-        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_item_add', inspection_id=i.id) }}">{{ csrf() }}
+        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_item_add', inspection_id=i.id) }}" data-confirm-title="Confirm action" data-confirm="Are you sure you want to continue with this action?">{{ csrf() }}
             <label class="span-all">Item<input name="item_name" required maxlength="180"></label>
             <label class="span-all">Category<input name="category" maxlength="100" placeholder="Custom"></label>
             <div class="mod-form-actions"><button class="btn-action" type="submit">Add</button></div>
@@ -60,14 +60,14 @@
     <div class="panel-card" style="margin-bottom:1rem">
         <h3 class="section-title">Complete inspection</h3>
         <p class="mod-muted" style="font-size:.72rem">All items need a result. Failed items automatically open a risk assessment.</p>
-        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_complete', inspection_id=i.id) }}">{{ csrf() }}
+        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_complete', inspection_id=i.id) }}" data-confirm-title="Complete inspection" data-confirm="Mark this inspection complete and close its checklist?">{{ csrf() }}
             <label class="span-all">Summary<textarea name="summary" rows="3" maxlength="2000"></textarea></label>
             <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Complete inspection</button></div>
         </form>
     </div>
     <div class="panel-card">
         <h3 class="section-title">Cancel inspection</h3>
-        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_cancel', inspection_id=i.id) }}" onsubmit="return confirm('Cancel this inspection?');">{{ csrf() }}
+        <form class="mod-form" method="POST" action="{{ url_for('modules.inspection_cancel', inspection_id=i.id) }}" data-confirm-title="Cancel inspection" data-confirm="Cancel this inspection? This change cannot be undone.">{{ csrf() }}
             <label class="span-all">Reason<input name="reason" required maxlength="500"></label>
             <div class="mod-form-actions"><button class="btn-action danger" type="submit">Cancel inspection</button></div>
         </form>

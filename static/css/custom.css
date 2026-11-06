@@ -6915,3 +6915,43 @@ body.dark-mode details.mod-edit > .mod-edit-body { background: #0f172a; border-c
 .risk-matrix .cell { min-height: 1.65rem; font-size: .7rem; border-radius: .25rem; }
 .live-refresh-note { display: block; margin: -.8rem 0 1rem; color: var(--bcp-muted); font-size: .72rem; }
 @media (max-width: 800px) { .risk-register-layout { grid-template-columns: 1fr; } .risk-register-layout .risk-matrix { max-width: 18rem; } }
+
+/* Reusable confirmation dialog for state-changing module actions */
+.confirmation-dialog {
+    width: min(100%, 28rem);
+}
+.confirmation-dialog .eyebrow {
+    color: #b45309;
+}
+.confirmation-dialog .eyebrow i {
+    margin-right: .25rem;
+}
+.confirmation-dialog .modal-subtitle {
+    line-height: 1.55;
+    color: var(--bcp-text);
+}
+.action-confirm-modal .modal-actions {
+    border-top: 1px solid var(--bcp-border);
+    padding-top: .9rem;
+}
+body.dark-mode .confirmation-dialog {
+    background: #0f172a;
+    border-color: #334155;
+}
+body.dark-mode .confirmation-dialog .modal-subtitle {
+    color: #e2e8f0;
+}
+
+/* Single consolidated dashboard KPI row */
+.general-kpi-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.general-kpi-grid .stat-card {
+    min-width: 0;
+}
+@media (max-width: 1100px) {
+    .general-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+    .general-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

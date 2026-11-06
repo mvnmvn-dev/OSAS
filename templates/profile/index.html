@@ -9,7 +9,7 @@
             <div class="profile-photo-preview">
                 {{ user_avatar(current_user, 'lg') }}
             </div>
-            <form method="POST" action="{{ url_for('profile.upload_photo') }}" enctype="multipart/form-data" class="profile-upload-form">
+            <form method="POST" action="{{ url_for('profile.upload_photo') }}" enctype="multipart/form-data" class="profile-upload-form" data-confirm-title="Upload file" data-confirm="Upload this file?">
                 {{ csrf_field() }}
                 <div class="form-group">
                     <label class="form-label" for="profile_image">Upload new photo</label>
@@ -19,7 +19,7 @@
                 <button type="submit" class="btn-primary-square"><i class="fas fa-upload"></i> Upload Photo</button>
             </form>
             {% if current_user.profile_image %}
-            <form method="POST" action="{{ url_for('profile.remove_photo') }}" class="profile-remove-form" onsubmit="return confirm('Remove your profile photo?');">
+            <form method="POST" action="{{ url_for('profile.remove_photo') }}" class="profile-remove-form" data-confirm-title="Remove profile photo" data-confirm="Remove your current profile photo?">
                 {{ csrf_field() }}
                 <button type="submit" class="btn-secondary"><i class="fas fa-trash"></i> Remove Photo</button>
             </form>
@@ -30,7 +30,7 @@
     <div class="page-card">
         <div class="page-card-header"><i class="fas fa-user-pen"></i> Personal Information</div>
         <div class="modal-body">
-            <form method="POST" action="{{ url_for('profile.update') }}">
+            <form method="POST" action="{{ url_for('profile.update') }}" data-confirm-title="Confirm action" data-confirm="Are you sure you want to continue with this action?">
                 {{ csrf_field() }}
                 {{ form_input('full_name', 'Full Name', value=profile.full_name, required=true) }}
                 {{ form_input('email', 'Email', type='email', value=profile.email, required=true) }}

@@ -534,6 +534,19 @@
     </div>
 
     {% block modals %}{% endblock %}
+    <div id="action-confirm-modal" class="modal action-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="action-confirm-title" aria-describedby="action-confirm-message">
+        <div class="modal-backdrop" data-confirm-close></div>
+        <div class="modal-dialog confirmation-dialog">
+            <button class="modal-close" type="button" data-confirm-close aria-label="Close confirmation"><i class="fas fa-xmark"></i></button>
+            <span class="eyebrow"><i class="fas fa-circle-question"></i> Confirm action</span>
+            <h2 id="action-confirm-title">Confirm this action</h2>
+            <p class="modal-subtitle" id="action-confirm-message">Are you sure you want to continue?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" data-confirm-close>Cancel</button>
+                <button type="button" class="btn-primary-square" id="action-confirm-submit"><i class="fas fa-check"></i> Continue</button>
+            </div>
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 

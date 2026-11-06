@@ -44,7 +44,7 @@
                 <div class="mod-actions">
                     <details class="mod-edit"><summary class="btn-action"><i class="fas fa-pen"></i> Edit</summary>
                         <div class="mod-edit-body">
-                        <form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
+                        <form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
                             <label>Name<input name="contact_name" value="{{ c.contact_name }}" required maxlength="150"></label>
                             <label>Phone<input name="phone" value="{{ c.phone }}" required maxlength="40"></label>
                             <label>Email<input type="email" name="email" value="{{ c.email or '' }}" maxlength="120"></label>
@@ -56,7 +56,7 @@
                             <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save changes</button></div>
                         </form></div>
                     </details>
-                    <form method="POST" action="{{ url_for('modules.contact_toggle', contact_id=c.id) }}">{{ csrf() }}<input type="hidden" name="active" value="{{ 0 if c.active else 1 }}">
+                    <form method="POST" action="{{ url_for('modules.contact_toggle', contact_id=c.id) }}" data-confirm-title="Change contact status" data-confirm="Change this emergency contact’s active status?">{{ csrf() }}<input type="hidden" name="active" value="{{ 0 if c.active else 1 }}">
                         <button class="btn-action" type="submit">{{ 'Deactivate' if c.active else 'Activate' }}</button></form>
                 </div>
                 {% endif %}
@@ -76,7 +76,7 @@
 {% block modals %}
 {% if has_perm('safety.manage') %}
 {% call modal('contact-modal', 'Emergency Contacts', 'Add emergency contact', 'Fire, police, medical and campus numbers used during incidents.') %}
-<form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}">{{ csrf() }}
+<form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}
     <label>Name<input name="contact_name" required maxlength="150" placeholder="e.g. Quezon City Fire Station"></label>
     <label>Phone<input name="phone" required maxlength="40" placeholder="e.g. 0917 123 4567"></label>
     <label>Email<input type="email" name="email" maxlength="120"></label>

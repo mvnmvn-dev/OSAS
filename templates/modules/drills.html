@@ -1,93 +1,91 @@
 {% extends "base.html" %}
 {% from 'macros/pagination.html' import render_pagination %}
 {% from 'modules/_ui.html' import csrf, badge, kpi, modal, empty, select_options %}
-{% block title %}Drill Scheduling | BCP Safety and Security{% endblock %}
+{% block title %}Emergency Contacts | BCP Safety and Security{% endblock %}
 {% block page_subtitle %}<p class="page-header-subtitle">{{ page_subtitle_text }}</p>{% endblock %}
 {% block page_actions %}
-<a class="btn-secondary" href="{{ url_for('modules.roles') }}"><i class="fas fa-user-tag"></i> Roles</a>
-{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="drill-modal"><i class="fas fa-plus"></i> Schedule Drill</button>{% endif %}
+{% if has_perm('safety.manage') %}<button class="btn-primary-square" data-open-modal="contact-modal"><i class="fas fa-plus"></i> Add Contact</button>{% endif %}
 {% endblock %}
 
-{% macro drill_fields(d=None) %}
-    <label class="span-all">Title<input name="title" required maxlength="180" value="{{ d.title if d else '' }}" placeholder="e.g. Q4 fire evacuation drill"></label>
-    <label>Drill type<select name="drill_type">{{ select_options(types, d.drill_type if d else 'fire') }}</select></label>
-    <label>Date &amp; time<input type="datetime-local" name="scheduled_at" required value="{{ d.scheduled_input if d else '' }}"></label>
-    <label>Assigned team<select name="team_id"><option value="">— None —</option>{% for t in teams %}<option value="{{ t.id }}" {% if d and d.team_id == t.id %}selected{% endif %}>{{ t.team_name }}</option>{% endfor %}</select></label>
-    <label>Checkpoint<select name="checkpoint_id"><option value="">— None —</option>{% for c in checkpoints %}<option value="{{ c.id }}" {% if d and d.checkpoint_id == c.id %}selected{% endif %}>{{ c.checkpoint_code }} · {{ c.checkpoint_name }}</option>{% endfor %}</select></label>
-    <label>Location<input name="location" maxlength="150" value="{{ (d.location if d else '') or '' }}" placeholder="Building / assembly area"></label>
-    <label class="span-all">Notes<textarea name="notes" rows="2" maxlength="2000" placeholder="Scenario, objectives, observers…">{{ '' if d else '' }}</textarea></label>
-{% endmacro %}
-
 {% block content %}
+{% if summary.missing_critical %}
+<div class="mod-alert danger"><i class="fas fa-triangle-exclamation"></i>
+    <div><strong>Missing emergency numbers:</strong> no active {{ summary.missing_critical|join(', ') }} contact is on file. Add them so staff can reach responders quickly.</div></div>
+{% endif %}
 <div class="mod-kpis">
-    {{ kpi('Planned', summary.planned) }}
-    {{ kpi('Overdue', summary.overdue, 'alert' if summary.overdue else '') }}
-    {{ kpi('Completed', summary.completed, 'good') }}
-    {{ kpi('Completion rate', summary.completion_rate ~ '%') }}
-    {{ kpi('Participants (total)', summary.participants) }}
-    {{ kpi('Avg evaluation', summary.avg_score if summary.avg_score is not none else '—') }}
+    {{ kpi('Active contacts', summary.total) }}
+    {% for key, label in types %}{% if summary.by_type.get(key) %}{{ kpi(label, summary.by_type[key]) }}{% endif %}{% endfor %}
 </div>
-{% if summary.next %}<div class="mod-alert" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af;"><i class="fas fa-calendar-day"></i><div><strong>Next drill:</strong> {{ summary.next.title }} · {{ summary.next.scheduled_label }}</div></div>{% endif %}
 
 <div class="panel-card">
-    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.drills') }}">
-        <label>Status<select name="status"><option value="">All</option>{% for k, v in statuses.items() %}<option value="{{ k }}" {% if k == status %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></label>
-        <label>Type<select name="type"><option value="">All</option>{{ select_options(types, dtype) }}</select></label>
-        <button class="btn-secondary" type="submit"><i class="fas fa-filter"></i> Filter</button>
+    <form class="mod-toolbar" method="GET" action="{{ url_for('modules.contacts') }}">
+        <label>Search<input type="search" name="q" value="{{ q }}" placeholder="Name, organization, phone…"></label>
+        <label>Type<select name="type"><option value="">All types</option>{{ select_options(types, ctype) }}</select></label>
+        <label style="display:flex;gap:.4rem;align-items:center;"><input type="checkbox" name="inactive" value="1" {% if show_all %}checked{% endif %} style="min-width:0;margin:0;"> Show inactive</label>
+        <button class="btn-secondary" type="submit"><i class="fas fa-magnifying-glass"></i> Filter</button>
     </form>
-    {% if drills %}
+
+    {% if contacts %}
     <div class="mod-table-wrap">
     <table class="mod-table">
-        <thead><tr><th>Drill</th><th>Scheduled</th><th>Status</th><th class="num">Participants</th><th>Result</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Contact</th><th>Type</th><th>Phone</th><th>Email</th><th class="num">Priority</th><th>Actions</th></tr></thead>
         <tbody>
-        {% for d in drills %}
-        <tr>
-            <td><strong>{{ d.title }}</strong>
-                <span class="sub">{{ d.type_label }}{% if d.team_name %} · {{ d.team_name }}{% endif %}{% if d.checkpoint_name %} · {{ d.checkpoint_code }}{% endif %}{% if d.location %} · {{ d.location }}{% endif %}</span></td>
-            <td>{{ d.scheduled_label }}{% if d.is_overdue %}<span class="sub" style="color:#b91c1c;">Past due — start or reschedule</span>{% endif %}</td>
-            <td>{{ badge(d.status_label, d.status_class) }}</td>
-            <td class="num">{{ d.participant_count or 0 }}</td>
-            <td>{% if d.status_key == 'completed' %}{% if d.duration_minutes %}{{ d.duration_minutes }} min{% endif %}{% if d.evaluation_score is not none %} · score {{ d.evaluation_score }}{% endif %}{% else %}<span class="mod-muted">—</span>{% endif %}</td>
+        {% for c in contacts %}
+        <tr {% if not c.active %}style="opacity:.55"{% endif %}>
+            <td><strong>{{ c.contact_name }}</strong>
+                <span class="sub">{{ c.organization or '' }}{% if c.organization and c.role_title %} · {% endif %}{{ c.role_title or '' }}</span>
+                {% if c.notes %}<span class="sub">{{ c.notes }}</span>{% endif %}</td>
+            <td>{{ badge(c.type_label, 'info') }}{% if not c.active %} {{ badge('Inactive', 'warning') }}{% endif %}</td>
+            <td><a href="tel:{{ c.tel }}">{{ c.phone }}</a></td>
+            <td>{% if c.email %}<a href="mailto:{{ c.email }}">{{ c.email }}</a>{% else %}<span class="mod-muted">—</span>{% endif %}</td>
+            <td class="num">{{ c.priority }}</td>
             <td>
                 {% if has_perm('safety.manage') %}
                 <div class="mod-actions">
-                    {% if d.next_statuses %}
-                    <details class="mod-edit"><summary class="btn-action"><i class="fas fa-arrows-rotate"></i> Update status</summary>
-                        <div class="mod-edit-body"><form class="mod-form" method="POST" action="{{ url_for('modules.drill_status', drill_id=d.id) }}">{{ csrf() }}
-                            <label>New status<select name="status">{% for s in d.next_statuses %}<option value="{{ s }}">{{ s.replace('_', ' ').title() }}</option>{% endfor %}</select></label>
-                            <label>Participants (required to complete)<input type="number" name="participant_count" min="0"></label>
-                            <label>Duration (minutes)<input type="number" name="duration_minutes" min="1" max="1440"></label>
-                            <label>Evaluation score (0–100)<input type="number" name="evaluation_score" min="0" max="100"></label>
-                            <label class="span-all">Notes / observations (reason required to cancel)<textarea name="notes" rows="2" maxlength="2000"></textarea></label>
-                            <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Apply</button></div>
-                        </form></div></details>
-                    {% endif %}
-                    {% if d.status_key in ('planned', 'cancelled') %}
                     <details class="mod-edit"><summary class="btn-action"><i class="fas fa-pen"></i> Edit</summary>
-                        <div class="mod-edit-body"><form class="mod-form" method="POST" action="{{ url_for('modules.drill_save') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ d.id }}">
-                            {{ drill_fields(d) }}
+                        <div class="mod-edit-body">
+                        <form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}<input type="hidden" name="id" value="{{ c.id }}">
+                            <label>Name<input name="contact_name" value="{{ c.contact_name }}" required maxlength="150"></label>
+                            <label>Phone<input name="phone" value="{{ c.phone }}" required maxlength="40"></label>
+                            <label>Email<input type="email" name="email" value="{{ c.email or '' }}" maxlength="120"></label>
+                            <label>Organization<input name="organization" value="{{ c.organization or '' }}" maxlength="150"></label>
+                            <label>Role / title<input name="role_title" value="{{ c.role_title or '' }}" maxlength="100"></label>
+                            <label>Type<select name="contact_type">{{ select_options(types, c.contact_type) }}</select></label>
+                            <label>Priority (1 = first)<input type="number" name="priority" min="1" max="999" value="{{ c.priority }}"></label>
+                            <label class="span-all">Notes<textarea name="notes" rows="2" maxlength="1000">{{ c.notes or '' }}</textarea></label>
                             <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save changes</button></div>
-                        </form></div></details>
-                    {% endif %}
-                    <a class="btn-action" href="{{ url_for('modules.roles', drill=d.id) }}"><i class="fas fa-user-tag"></i> Roles</a>
+                        </form></div>
+                    </details>
+                    <form method="POST" action="{{ url_for('modules.contact_toggle', contact_id=c.id) }}" data-confirm-title="Change contact status" data-confirm="Change this emergency contact’s active status?">{{ csrf() }}<input type="hidden" name="active" value="{{ 0 if c.active else 1 }}">
+                        <button class="btn-action" type="submit">{{ 'Deactivate' if c.active else 'Activate' }}</button></form>
                 </div>
                 {% endif %}
             </td>
         </tr>
         {% endfor %}
         </tbody>
-    </table></div>
+    </table>
+    </div>
     {{ render_pagination(pagination) }}
-    {% else %}{{ empty('fa-calendar-check', 'No drills match', 'Schedule a drill to keep campus preparedness current.') }}{% endif %}
+    {% else %}
+    {{ empty('fa-address-book', 'No contacts found', 'Add the numbers staff need during an emergency: security desk, clinic, fire station, police and utilities.') }}
+    {% endif %}
 </div>
 {% endblock %}
 
 {% block modals %}
 {% if has_perm('safety.manage') %}
-{% call modal('drill-modal', 'Drill Scheduling', 'Schedule an emergency drill', 'A team cannot be double-booked within 60 minutes.') %}
-<form class="mod-form" method="POST" action="{{ url_for('modules.drill_save') }}">{{ csrf() }}
-    {{ drill_fields() }}
-    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Schedule drill</button></div>
+{% call modal('contact-modal', 'Emergency Contacts', 'Add emergency contact', 'Fire, police, medical and campus numbers used during incidents.') %}
+<form class="mod-form" method="POST" action="{{ url_for('modules.contact_save') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}
+    <label>Name<input name="contact_name" required maxlength="150" placeholder="e.g. Quezon City Fire Station"></label>
+    <label>Phone<input name="phone" required maxlength="40" placeholder="e.g. 0917 123 4567"></label>
+    <label>Email<input type="email" name="email" maxlength="120"></label>
+    <label>Organization<input name="organization" maxlength="150"></label>
+    <label>Role / title<input name="role_title" maxlength="100"></label>
+    <label>Type<select name="contact_type">{{ select_options(types, 'internal') }}</select></label>
+    <label>Priority (1 = shown first)<input type="number" name="priority" min="1" max="999" value="100"></label>
+    <label class="span-all">Notes<textarea name="notes" rows="2" maxlength="1000" placeholder="Hours, extension, what to say…"></textarea></label>
+    <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Save contact</button></div>
 </form>
 {% endcall %}
 {% endif %}

@@ -280,6 +280,42 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Reusable confirmation modal for meaningful state-changing actions.
+(function initActionConfirmations() {
+    const modal = document.getElementById('action-confirm-modal');
+    const confirmButton = document.getElementById('action-confirm-submit');
+    const title = document.getElementById('action-confirm-title');
+    const message = document.getElementById('action-confirm-message');
+    if (!modal || !confirmButton) return;
+    let pendingForm = null;
+
+    const close = () => {
+        modal.classList.remove('open');
+        pendingForm = null;
+    };
+    modal.querySelectorAll('[data-confirm-close]').forEach((el) => el.addEventListener('click', close));
+    confirmButton.addEventListener('click', () => {
+        const form = pendingForm;
+        close();
+        if (form) HTMLFormElement.prototype.submit.call(form);
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && modal.classList.contains('open')) close();
+    });
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement) || !form.dataset.confirm || form.dataset.confirmBypassed === '1') return;
+        event.preventDefault();
+        pendingForm = form;
+        title.textContent = form.dataset.confirmTitle || 'Confirm this action';
+        message.textContent = form.dataset.confirm;
+        confirmButton.innerHTML = '<i class="fas fa-check"></i> ' + (form.dataset.confirmLabel || 'Continue');
+        modal.classList.add('open');
+        const first = modal.querySelector('[data-confirm-close]');
+        if (first) first.focus();
+    });
+})();
+
 // Confirm delete via modal
 document.querySelectorAll('[data-confirm-modal]').forEach(btn => {
     btn.addEventListener('click', () => {

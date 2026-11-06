@@ -1517,6 +1517,8 @@ def get_safety_dashboard(section="overview", status_filter=None):
             {"label": "Patrol Coverage", "value": f"{patrol_meta['coverage']}%", "hint": coverage_hint, "updated": last_updated_label, "theme": "emerald", "icon": "fa-route", "url": u["patrol"]},
             {"label": "Personnel on Duty", "value": f"{on_duty_teams:02d}", "hint": f"{on_duty_teams} active · {standby_teams} standby", "updated": last_updated_label, "theme": "indigo", "icon": "fa-user-shield", "url": u["teams"]},
             {"label": "Campus Readiness", "value": f"{readiness}%", "hint": f"{len(actions)} actions pending · {insp_completed}/{max(inspection_total,1)} inspections done" if inspections else f"{len(actions)} actions pending", "updated": last_updated_label, "theme": "amber", "icon": "fa-shield-heart", "url": u["emergency"]},
+            {"label": "Risk Index", "value": f"{avg_risk:g}", "hint": "Checkpoint-weighted campus average", "updated": last_updated_label, "theme": "amber", "icon": "fa-gauge-high", "url": u["patrol"]},
+            {"label": "Avg Response", "value": operational["avg_response"], "hint": "Incident response time", "updated": last_updated_label, "theme": "indigo", "icon": "fa-stopwatch", "url": u["incidents"]},
         ],
         "incidents": [
             {"label": "Reported", "value": f"{counts.get('reported', 0):02d}", "hint": "Awaiting verification", "updated": last_updated_label, "theme": "red", "icon": "fa-bullhorn", "url": f"{u['incidents']}?status=reported"},

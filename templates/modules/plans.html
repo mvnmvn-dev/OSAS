@@ -32,7 +32,7 @@
             <td>{% if p.has_map %}<a href="{{ url_for('modules.plan_map', plan_id=p.id) }}" target="_blank" rel="noopener">View</a> · <a href="{{ url_for('modules.plan_map', plan_id=p.id, download=1) }}">Download</a>{% else %}<span class="mod-muted">No map attached</span>{% endif %}</td>
             <td>{% if has_perm('safety.manage') %}<div class="mod-actions">
                 {% if not p.active and not p.approved_at %}
-                <form method="POST" action="{{ url_for('modules.plan_approve', plan_id=p.id) }}">{{ csrf() }}<button class="btn-action primary" type="submit"><i class="fas fa-check"></i> Approve</button></form>{% endif %}
+                <form method="POST" action="{{ url_for('modules.plan_approve', plan_id=p.id) }}" data-confirm-title="Approve plan" data-confirm="Approve this evacuation plan and make it active?">{{ csrf() }}<button class="btn-action primary" type="submit"><i class="fas fa-check"></i> Approve</button></form>{% endif %}
                 {% if not p.active %}{% endif %}
             </div>{% endif %}</td>
         </tr>
@@ -46,7 +46,7 @@
 {% block modals %}
 {% if has_perm('safety.manage') %}
 {% call modal('plan-modal', 'Evacuation Plans', 'New plan or new version', 'Uploading a plan for an existing building and floor creates the next version, which replaces the current one once approved.') %}
-<form class="mod-form" method="POST" action="{{ url_for('modules.plan_save') }}" enctype="multipart/form-data">{{ csrf() }}
+<form class="mod-form" method="POST" action="{{ url_for('modules.plan_save') }}" enctype="multipart/form-data" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}
     <label>Building<select name="building_id"><option value="">— Select —</option>{% for b in buildings %}<option value="{{ b.id }}">{{ b.building_name }}</option>{% endfor %}</select></label>
     <label>…or new building name<input name="new_building" maxlength="150" placeholder="Only if not listed"></label>
     <label>Floor / area<input name="floor_label" required maxlength="40" placeholder="e.g. Ground floor"></label>

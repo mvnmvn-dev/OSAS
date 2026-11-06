@@ -53,12 +53,12 @@
             <td>{{ badge(r.status.title(), 'info') }}</td>
             <td>{% if has_perm('safety.manage') %}<div class="mod-actions">
                 {% if r.next_statuses %}<details class="mod-edit"><summary class="btn-action">Change status</summary><div class="mod-edit-body">
-                    <form class="mod-form" method="POST" action="{{ url_for('modules.risk_status', risk_id=r.id) }}">{{ csrf() }}
+                    <form class="mod-form" method="POST" action="{{ url_for('modules.risk_status', risk_id=r.id) }}" data-confirm-title="Apply update" data-confirm="Apply this status or corrective-action update?">{{ csrf() }}
                         <label>New status<select name="status">{% for s in r.next_statuses %}<option value="{{ s }}">{{ s.title() }}</option>{% endfor %}</select></label>
                         <label class="span-all">Note (required to accept a risk)<input name="note" maxlength="1000"></label>
                         <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Apply</button></div></form></div></details>{% endif %}
                 <details class="mod-edit"><summary class="btn-action"><i class="fas fa-pen"></i> Edit</summary><div class="mod-edit-body">
-                    <form class="mod-form" method="POST" action="{{ url_for('modules.risk_save') }}">{{ csrf() }}<input type="hidden" name="id" value="{{ r.id }}">{{ risk_fields(r) }}
+                    <form class="mod-form" method="POST" action="{{ url_for('modules.risk_save') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}<input type="hidden" name="id" value="{{ r.id }}">{{ risk_fields(r) }}
                         <div class="mod-form-actions"><button class="btn-primary-square" type="submit">Save</button></div></form></div></details>
             </div>{% endif %}</td>
         </tr>
@@ -70,7 +70,7 @@
 {% block modals %}
 {% if has_perm('safety.manage') %}
 {% call modal('risk-modal', 'Risk Assessment', 'Assess a hazard', 'Score is calculated automatically from likelihood and severity.') %}
-<form class="mod-form" method="POST" action="{{ url_for('modules.risk_save') }}">{{ csrf() }}{{ risk_fields() }}
+<form class="mod-form" method="POST" action="{{ url_for('modules.risk_save') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}{{ risk_fields() }}
     <div class="mod-form-actions"><button type="button" class="btn-secondary" data-close-modal>Cancel</button><button class="btn-primary-square" type="submit">Record risk</button></div>
 </form>
 {% endcall %}

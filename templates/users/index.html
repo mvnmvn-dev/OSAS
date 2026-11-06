@@ -47,7 +47,7 @@
 <div class="modal" id="add-user-modal" aria-hidden="true">
     <div class="modal-backdrop"></div><div class="modal-dialog modal-lg">
         <div class="modal-header"><h2 class="modal-title"><i class="fas fa-user-plus"></i> Add User</h2><button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button></div>
-        <form method="POST" action="{{ url_for('users.create') }}">
+        <form method="POST" action="{{ url_for('users.create') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">
             {{ csrf_field() }}
             <div class="modal-body">
                 <p class="modal-intro">Create an account and assign the user’s access level. They will be required to change the temporary password at first login.</p>
@@ -66,7 +66,7 @@
         <div class="modal-header"><h2 class="modal-title"><i class="fas fa-user-gear"></i> Manage {{ user.full_name }}</h2><button type="button" class="modal-close" data-close-modal aria-label="Close">&times;</button></div>
         <div class="modal-body">
             <div class="user-modal-summary"><span class="user-table-avatar">{{ user.full_name[:1]|upper }}</span><div><strong>{{ user.full_name }}</strong><span>@{{ user.username }} · {{ user.email }}</span></div><span class="status-badge status-{{ 'success' if user.account_status == 'active' else 'danger' }}">{{ user.account_status|title }}</span></div>
-            <form method="POST" action="{{ url_for('users.update', user_id=user.id) }}">
+            <form method="POST" action="{{ url_for('users.update', user_id=user.id) }}" data-confirm-title="Confirm action" data-confirm="Are you sure you want to continue with this action?">
                 {{ csrf_field() }}
                 <div class="form-row">{{ form_input('full_name', 'Full Name', value=user.full_name, required=true) }}{{ form_input('email', 'Email', type='email', value=user.email, required=true) }}</div>
                 <div class="form-row">{{ form_input('campus_id', 'Campus ID', value=user.campus_id, required=true) }}{{ form_select('role', 'Role', [('admin','Administrator'),('security_head','Security Head'),('guard','Security Guard'),('safety_officer','Safety Officer'),('faculty_staff','Faculty / Staff')], user.role) }}</div>
@@ -74,7 +74,7 @@
                 <div class="modal-footer modal-footer-inline"><button type="submit" class="btn-primary-square"><i class="fas fa-save"></i> Save Account</button></div>
             </form>
             <div class="modal-section-divider"></div>
-            <form method="POST" action="{{ url_for('users.reset_password', user_id=user.id) }}">
+            <form method="POST" action="{{ url_for('users.reset_password', user_id=user.id) }}" data-confirm-title="Reset password" data-confirm="Reset this user’s password and require a change at next login?">
                 {{ csrf_field() }}
                 <h3 class="modal-section-title"><i class="fas fa-key"></i> Reset Password</h3><p class="form-hint">The user will be required to change the new password at their next login.</p>
                 <div class="form-row user-password-row">{{ form_input('password', 'New Temporary Password', type='password', required=true) }}<div class="form-group form-action-align"><button type="submit" class="btn-secondary"><i class="fas fa-key"></i> Reset Password</button></div></div>

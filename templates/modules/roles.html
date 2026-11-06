@@ -44,7 +44,7 @@
 {% endif %}
 {% if has_perm('safety.manage') %}
 {% call modal('role-modal', 'Emergency Roles', 'Add emergency role') %}
-<form class="mod-form" method="POST" action="{{ url_for('modules.role_save') }}">{{ csrf() }}
+<form class="mod-form" method="POST" action="{{ url_for('modules.role_save') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}
     <label>Role name<input name="role_name" required maxlength="120"></label>
     <label>Scope<select name="drill_id"><option value="">Standing (all emergencies)</option>{% for d in drills %}<option value="{{ d.id }}">{{ d.title }}</option>{% endfor %}</select></label>
     <label class="span-all">Responsibility<textarea name="responsibility" rows="3" required maxlength="1000"></textarea></label>

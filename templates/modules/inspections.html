@@ -35,7 +35,7 @@
 {% block modals %}
 {% if has_perm('safety.manage') %}
 {% call modal('insp-modal', 'Inspections', 'Schedule an inspection', 'A checklist is generated from the selected type.') %}
-<form class="mod-form" method="POST" action="{{ url_for('modules.inspection_schedule') }}">{{ csrf() }}
+<form class="mod-form" method="POST" action="{{ url_for('modules.inspection_schedule') }}" data-confirm-title="Confirm submission" data-confirm="Submit this change?">{{ csrf() }}
     <label>Campus zone<select name="zone_id" required><option value="">— Select —</option>{% for z in zones %}<option value="{{ z.id }}">{{ z.zone_name }}</option>{% endfor %}</select></label>
     <label>Inspection type<select name="inspection_type">{% for t in types %}<option>{{ t }}</option>{% endfor %}</select></label>
     <label>Scheduled date<input type="date" name="scheduled_date" required></label>
