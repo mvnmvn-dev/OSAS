@@ -38,8 +38,10 @@ def _row(row):
     result = dict(row)
     for key in ("valid_until", "visit_date", "entry_at", "exit_at", "created_at"):
         value = result.get(key)
-        if hasattr(value, "isoformat"):
+        if isinstance(value, datetime):
             result[key] = value.isoformat(sep=" ")
+        elif hasattr(value, "isoformat"):  # plain date (e.g. visit_date on PostgreSQL)
+            result[key] = value.isoformat()
     return result
 
 

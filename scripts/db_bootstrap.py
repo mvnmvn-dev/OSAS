@@ -191,17 +191,13 @@ def bootstrap_with_app(app=None) -> dict:
         f"(ssl={Config.PGSSL})"
     )
     ensure_database(database)
-    if not table_exists(database, "users"):
-        print("Applying schema.sql ...")
-        apply_schema(database)
-        status["schema_applied"] = True
-        print("Schema applied.")
-    else:
-        print("Schema already present — skipping create.")
-        if not table_exists(database, "login_otp_challenges"):
-            print("Applying login_otp_challenges migration ...")
-            apply_schema(database)
-            status["schema_applied"] = True
+    # schema.sql is fully idempotent (CREATE ... IF NOT EXISTS), so apply it on
+    # every deploy. This also creates module tables missing from older databases.
+    first_run = not table_exists(database, "users")
+    print("Applying schema.sql ...")
+    apply_schema(database)
+    status["schema_applied"] = True
+    print("Schema applied." if first_run else "Schema verified (missing tables created).")
     migrate_shared_admin_email(database)
     print("Seeding software.engineer / demo users / campus ...")
     _seed_users(database)
